@@ -26,8 +26,8 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .cache/bg0-assets/
-          key: bg0-lite-${{ hashFiles('scripts/bg-assets.mjs', 'vendor/bg0-browser-0.1.2.tgz') }}
-      - run: npm run bg:assets -- lite
+          key: bg0-verified-models-${{ hashFiles('scripts/bg-assets.mjs', 'vendor/bg0-browser-0.1.2.tgz') }}
+      - run: npm run bg:assets
       - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: steps.bg0-cache.outputs.cache-hit != 'true'
         with:

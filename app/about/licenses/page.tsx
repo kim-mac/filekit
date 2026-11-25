@@ -13,7 +13,7 @@ const licenses = [
 export default function LicensesPage() {
   return (
     <main className="home">
-      <Link href="/">FileKit home</Link>
+      <Link href="/" prefetch={false}>FileKit home</Link>
       <h1>Licenses</h1>
       <p>FileKit is available under the MIT license.</p>
       <h2>Background removal</h2>

@@ -10,7 +10,7 @@ export default function ImagesPage() {
     <>
       <header className="site-header">
         <div className="site-bar">
-          <Link href="/" className="back-link"><ChevronLeft size={17} aria-hidden /> All tools</Link>
+          <Link href="/" prefetch={false} className="back-link"><ChevronLeft size={17} aria-hidden /> All tools</Link>
           <span className="privacy"><ShieldCheck size={17} aria-hidden /> Files stay on this device</span>
         </div>
       </header>

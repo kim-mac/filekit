@@ -61,7 +61,10 @@ async function inferenceInput(original: Blob, edge: number) {
 function progress(update: RemovalProgress, ios: boolean): RemovalUpdate {
   const tier = update.model === 'birefnet' ? 'Full' : update.model ? 'Lite' : undefined;
   const bytes = ios ? iosModelBytes : tier === 'Full' ? MODEL_TIER_BYTES.full : MODEL_TIER_BYTES.lite;
-  const detail = update.stage === 'downloading' ? ` · Model ${mib(bytes)}` : '';
+  const detail = update.stage === 'downloading'
+    ? update.download ? ` · ${mib(Math.min(bytes, update.download.loadedBytes))} / ${mib(bytes)}`
+      : ` · Model ${mib(bytes)}`
+    : '';
   return {
     message: `${tier ? `${tier} · ` : ''}${update.message}${detail}`,
     progress: update.progress,

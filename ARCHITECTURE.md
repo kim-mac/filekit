@@ -134,7 +134,7 @@ The Cloudflare build downloads pinned weights as build inputs and publishes only
 
 ## Testing plan
 
-Run `npm ci`, `npx playwright install --with-deps chromium firefox webkit`, and `npm run test:all`. The last command runs Vitest, builds the static export, then serves `out/` locally for Playwright. CI stages the pinned Lite model through a keyed dependency cache, sets `FILEKIT_BG_E2E=1`, and runs the same command on every push and pull request.
+Run `npm ci`, `npx playwright install --with-deps chromium firefox webkit`, and `npm run test:all`. The last command runs Vitest, builds the static export, then serves `out/` locally for Playwright. CI stages the pinned model assets through a keyed dependency cache, sets `FILEKIT_BG_E2E=1`, and runs the same command on every push and pull request.
 
 | Suite | Phase 1 coverage |
 | --- | --- |
