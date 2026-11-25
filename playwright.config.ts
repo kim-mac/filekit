@@ -1,9 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Playwright 1.65's new Firefox interceptor misses native blob saves for
+// WebP and AVIF. The legacy interceptor reports and verifies those downloads.
+process.env.PLAYWRIGHT_FIREFOX_LEGACY_DOWNLOADS ??= '1';
+
 const baseURL = 'http://127.0.0.1:4173';
 
 export default defineConfig({
   testDir: './test/e2e',
+  snapshotPathTemplate: '{testDir}/../screenshots/{projectName}/{arg}{ext}',
   reporter: 'list',
   forbidOnly: Boolean(process.env.CI),
   workers: 2,
