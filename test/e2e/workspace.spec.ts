@@ -56,7 +56,7 @@ for (const [label, format, extension] of [
     await pick(page, 'transparent.png');
     await waitForImage(page, 'transparent.png');
     await expect(page.getByRole('button', { name: 'Convert', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByText('Exports retain full resolution and strip EXIF metadata.')).toBeVisible();
+    await expect(page.getByText('Exports use the original pixels and strip EXIF metadata.')).toBeVisible();
     for (const choice of ['JPG', 'PNG', 'WebP', 'AVIF']) await expect(formatChoice(page, choice)).toBeVisible();
     await expect(page.getByRole('slider', { name: 'Quality' })).toHaveCount(0);
 

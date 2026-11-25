@@ -44,4 +44,23 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
       maxDiffPixelRatio: 0.04,
     });
   }
+
+  await page.getByRole('button', { name: 'Crop', exact: true }).click();
+  await page.getByRole('radio', { name: '4:5', exact: true }).check();
+  const cropBox = page.getByRole('group', { name: 'Crop box' });
+  await expect(cropBox).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resize crop from bottom right' })).toBeVisible();
+  await page.evaluate(() => scrollTo(0, 0));
+  const crop = await page.screenshot({ path: testInfo.outputPath('crop.png'), fullPage: true, animations: 'disabled' });
+  await testInfo.attach('crop', { body: crop, contentType: 'image/png' });
+  if (usesSnapshots) {
+    await expect(isMobile ? page.getByRole('region', { name: 'Preview' }) : page).toHaveScreenshot('crop.png', {
+      fullPage: !isMobile, animations: 'disabled', maxDiffPixelRatio: 0.04,
+    });
+    if (isMobile) {
+      await expect(page.getByRole('region', { name: 'Tools' })).toHaveScreenshot('crop-controls.png', {
+        maxDiffPixelRatio: 0.04,
+      });
+    }
+  }
 });

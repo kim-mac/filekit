@@ -65,6 +65,7 @@ export function ImageWorkspace() {
   const [download, setDownload] = useState<ImageExport>();
   const [notice, setNotice] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [previewTarget, setPreviewTarget] = useState<HTMLDivElement | null>(null);
   const dragDepth = useRef(0);
   const swipeStart = useRef<{ id: number; x: number; y: number } | undefined>(undefined);
   const picker = useRef<HTMLInputElement>(null);
@@ -79,15 +80,22 @@ export function ImageWorkspace() {
   const previewUrl = useObjectUrl(shownPreview?.result.blob);
   const downloadUrl = useObjectUrl(download?.blob);
   const selectedInfo = selected?.info;
+  const activeId = selected?.id;
+  const toolsDisabled = !previewIsCurrent || selected?.status !== 'ready' || Boolean(exportJob);
 
   const updateEntry = useCallback((id: string, update: Partial<Entry>) => {
     setEntries((current) => current.map((entry) => entry.id === id ? { ...entry, ...update } : entry));
   }, []);
 
   useEffect(() => {
+    if (activeId) client.retainPreview(activeId);
+    else client.stop();
+  }, [activeId, client]);
+
+  useEffect(() => {
     if (!work) return;
     let pending = true;
-    const request = { ...requestFor(work), maxEdge: 1400 };
+    const request = { ...requestFor(work), cache: shouldPreviewSelection };
     setPreviewProgress(undefined);
     client.run((worker, progress) => worker.renderPreview(request, progress), (progress) => {
       if (pending) setPreviewProgress(progress);
@@ -96,7 +104,6 @@ export function ImageWorkspace() {
       pending = false;
       if (shouldPreviewSelection) setPreview({ id: work.id, stack: work.stack, result });
       updateEntry(work.id, { status: 'ready', info: result.info, error: undefined });
-      if (result.info.width * result.info.height > 16_000_000) client.stop();
     }, (error: unknown) => {
       if (!pending) return;
       pending = false;
@@ -122,7 +129,6 @@ export function ImageWorkspace() {
       setNotice(status);
       setExportJob(undefined);
       setExportProgress(undefined);
-      client.stop();
     };
     if (exportJob.kind === 'image') {
       const entry = exportJob.entries[0];
@@ -200,7 +206,7 @@ export function ImageWorkspace() {
       addFiles(files);
     };
     const keydown = (event: KeyboardEvent) => {
-      if ((!event.metaKey && !event.ctrlKey) || event.altKey || exportJob) return;
+      if (event.defaultPrevented || (!event.metaKey && !event.ctrlKey) || event.altKey || exportJob) return;
       const key = event.key.toLowerCase();
       if (key === 'o') {
         event.preventDefault();
@@ -299,6 +305,7 @@ export function ImageWorkspace() {
             )}
           </div>
           <div
+            ref={setPreviewTarget}
             className={`preview-stage ${previewUrl ? 'checkerboard' : ''}`}
             aria-busy={Boolean(selected && selected.id === work?.id)}
             onPointerDown={(event) => {
@@ -385,9 +392,11 @@ export function ImageWorkspace() {
             <div className="panel-heading"><h2 id="tools-title">Tools</h2></div>
             {selected && selectedInfo && (
               <ToolPanel revision={selected.stack}
-                registry={imageTools} context={{ hasAlpha: selectedInfo.hasAlpha }}
+                registry={imageTools} context={{
+                  hasAlpha: selectedInfo.hasAlpha, size: selectedInfo, previewUrl, previewTarget, disabled: toolsDisabled,
+                }}
                 initialOptions={{ convert: selectedInfo.output }}
-                disabled={!previewIsCurrent || selected.status !== 'ready' || Boolean(exportJob)}
+                disabled={toolsDisabled}
                 onApply={(command: EditCommand) => edit(selected, recordEdit(selected.stack, command))} />
             )}
             {(!selected || !selectedInfo) && <p className="section-note">Select a decoded image to edit its output.</p>}
@@ -401,7 +410,7 @@ export function ImageWorkspace() {
                 {outputFormats[selectedInfo.output.format].lossy && ` · Quality ${selectedInfo.output.quality}%`}
                 {selectedInfo.hasAlpha && selectedInfo.output.format === 'jpeg' && ` · ${selectedInfo.output.background === '#ffffff' ? 'White' : 'Black'} background`}
               </p>}
-              <p className="section-note">Exports retain full resolution and strip EXIF metadata.</p>
+              <p className="section-note">Exports use the original pixels and strip EXIF metadata.</p>
               <div className="export-buttons">
                 <button className="button primary" disabled={selected?.status !== 'ready' || !previewIsCurrent || Boolean(exportJob)}
                   onClick={() => selected && startExport('image', [selected])}>

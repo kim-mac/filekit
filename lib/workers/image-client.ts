@@ -36,6 +36,10 @@ export class ImageWorkerClient {
     }
   }
 
+  retainPreview(id: string) {
+    void this.remote?.retainPreview(id);
+  }
+
   stop(reason: Error = new DOMException('Image processing canceled.', 'AbortError')) {
     this.rejectJob?.(reason);
     this.rejectJob = undefined;

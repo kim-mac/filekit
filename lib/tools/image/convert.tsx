@@ -1,10 +1,7 @@
 import { Repeat2 } from 'lucide-react';
 import type { ToolDefinition } from '../../core/contracts';
+import type { ImageToolContext } from './context';
 import { defaultConvertOptions, outputFormats, type ConvertOptions, type ImageState, type OutputFormat } from './formats';
-
-export interface ImageToolContext {
-  readonly hasAlpha: boolean;
-}
 
 function ConvertOptionsPanel({ value, onChange, context }: {
   value: ConvertOptions;

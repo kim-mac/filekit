@@ -1,4 +1,5 @@
 import { outputFormats, type ConvertOptions } from '../../tools/image/formats';
+import { isOrientation } from '../../tools/image/geometry';
 import { detectFormat, firstWebpFrame, hasContainerOrientation } from './headers';
 import { flatten, orient } from './pixels';
 
@@ -36,7 +37,7 @@ async function readOrientation(input: ArrayBuffer): Promise<number> {
   }
 }
 
-export async function decodeImage(original: Blob) {
+export async function decodeImage(original: Blob, normalize = true) {
   const buffer = await original.arrayBuffer();
   const format = detectFormat(buffer);
   const containerOriented = (format === 'heic' || format === 'avif') && hasContainerOrientation(buffer);
@@ -52,10 +53,9 @@ export async function decodeImage(original: Blob) {
   }
   if (!frame) throw new Error('The decoder returned no image.');
 
-  if (!containerOriented && format !== 'gif') {
-    frame = orient(frame, await readOrientation(buffer));
-  }
-  return { frame, format };
+  const tag = !containerOriented && format !== 'gif' ? await readOrientation(buffer) : 1;
+  const orientation = isOrientation(tag) ? tag : 1;
+  return { frame: normalize ? orient(frame, orientation) : frame, format, orientation };
 }
 
 export async function encodeImage(frame: ImageData, options: ConvertOptions): Promise<Blob> {
@@ -68,8 +68,15 @@ export async function encodeImage(frame: ImageData, options: ConvertOptions): Pr
       break;
     }
     case 'png': {
-      const { default: encode } = await import('@jsquash/png/encode.js');
-      bytes = await encode(frame);
+      const [{ init }, { encode }] = await Promise.all([
+        import('@jsquash/png/encode.js'),
+        import('@jsquash/png/codec/pkg/squoosh_png.js'),
+      ]);
+      await init();
+      // The convenience encoder ignores byteOffset and byteLength.
+      const { data } = frame;
+      const pixels = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      bytes = encode(pixels, frame.width, frame.height, 8).buffer as ArrayBuffer;
       break;
     }
     case 'webp': {
