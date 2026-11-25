@@ -1,0 +1,816 @@
+{
+  "environment": {
+    "platform": "linux",
+    "kernel": "6.18.57",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCpuCount": 3,
+    "softwareWebgpu": false,
+    "wasmThreads": 1,
+    "ort": "1.25.1"
+  },
+  "repeats": 1,
+  "results": [
+    {
+      "model": "u2netp",
+      "backend": "wasm",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 708.4000000000233,
+        "sessionMs": 3404.0999999999767,
+        "loadMs": 4158.5,
+        "adapter": null
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 195009536,
+        "peakBytes": 695775232,
+        "peakDeltaBytes": 500765696,
+        "samples": 626
+      },
+      "fixtures": [
+        {
+          "id": "portrait-wind",
+          "timingsMs": [
+            9071.400000000023
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 800.5,
+            "decontamination": 279.70000000006985
+          }
+        },
+        {
+          "id": "portrait-dark-hair",
+          "timingsMs": [
+            7570.699999999953
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 827.6999999999534,
+            "decontamination": 651.7000000000698
+          }
+        },
+        {
+          "id": "person-urban",
+          "timingsMs": [
+            10754.900000000023
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "tabby-clutter",
+          "timingsMs": [
+            7673.199999999953
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 467.0999999999767,
+            "decontamination": 203.5
+          }
+        },
+        {
+          "id": "gray-cat",
+          "timingsMs": [
+            12849.400000000023
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 858.4000000000233,
+            "decontamination": 829.5999999999767
+          }
+        },
+        {
+          "id": "chow-fur",
+          "timingsMs": [
+            7990.900000000023
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 1767,
+            "decontamination": 825.1000000000931
+          }
+        },
+        {
+          "id": "dog-trail",
+          "timingsMs": [
+            11318.5
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 1175,
+            "decontamination": 305.10000000009313
+          }
+        },
+        {
+          "id": "vase-white",
+          "timingsMs": [
+            14194.099999999977
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "teapot-clutter",
+          "timingsMs": [
+            11760.600000000093
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "tinted-lenses",
+          "timingsMs": [
+            9263.5
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "backpack",
+          "timingsMs": [
+            7810.900000000023
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-white",
+          "timingsMs": [
+            3534.9000000000233
+          ],
+          "scores": {
+            "iou": 0.9947700232267851,
+            "boundaryF": 1
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-low-contrast",
+          "timingsMs": [
+            3603
+          ],
+          "scores": {
+            "iou": 0.989936473992075,
+            "boundaryF": 0.9990291225494544
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "glass-stemware",
+          "timingsMs": [
+            3442.70000000007
+          ],
+          "scores": {
+            "iou": 0.16183466840157767,
+            "boundaryF": 0.4149794513114125
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "fuzzy-toy",
+          "timingsMs": [
+            3998.5999999999767
+          ],
+          "scores": {
+            "iou": 0.9420106679035251,
+            "boundaryF": 0.680317087357064
+          },
+          "guidedScores": {
+            "iou": 0.9442120594232449,
+            "boundaryF": 0.5982526465895577
+          },
+          "refinementMs": {
+            "guided": 743.1000000000931,
+            "decontamination": 122.09999999997672
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "model": "modnet",
+      "backend": "wasm",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 1349.9000000000233,
+        "sessionMs": 1299.5999999999767,
+        "loadMs": 2711.5999999999767,
+        "adapter": null
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 271977472,
+        "peakBytes": 560809984,
+        "peakDeltaBytes": 288832512,
+        "samples": 212
+      },
+      "fixtures": [
+        {
+          "id": "portrait-wind",
+          "timingsMs": [
+            2330.5
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "portrait-dark-hair",
+          "timingsMs": [
+            2320.6999999999534
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "person-urban",
+          "timingsMs": [
+            2277.3000000000466
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "tabby-clutter",
+          "timingsMs": [
+            6131
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "gray-cat",
+          "timingsMs": [
+            5256.599999999977
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "chow-fur",
+          "timingsMs": [
+            2587.6999999999534
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "dog-trail",
+          "timingsMs": [
+            2821.20000000007
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "vase-white",
+          "timingsMs": [
+            2439.5999999999767
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "teapot-clutter",
+          "timingsMs": [
+            3346.1999999999534
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "tinted-lenses",
+          "timingsMs": [
+            3158.5999999999767
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "backpack",
+          "timingsMs": [
+            2405.20000000007
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-white",
+          "timingsMs": [
+            2905.5
+          ],
+          "scores": {
+            "iou": 0.7235404358045867,
+            "boundaryF": 0.6686839391682873
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-low-contrast",
+          "timingsMs": [
+            2348
+          ],
+          "scores": {
+            "iou": 0.0017154293338416087,
+            "boundaryF": 0.08414634146341465
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "glass-stemware",
+          "timingsMs": [
+            1747.7999999999302
+          ],
+          "scores": {
+            "iou": 0.17861067024783298,
+            "boundaryF": 0.47834884662080124
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "fuzzy-toy",
+          "timingsMs": [
+            1960.9000000000233
+          ],
+          "scores": {
+            "iou": 0.9616576433307218,
+            "boundaryF": 0.8513159510425887
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        }
+      ],
+      "errors": []
+    },
+    {
+      "model": "isnet",
+      "backend": "wasm",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 2838.5999999999767,
+        "sessionMs": 1408.9000000000233,
+        "loadMs": 4264.800000000047,
+        "adapter": null
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 275908608,
+        "peakBytes": 1317202944,
+        "peakDeltaBytes": 1041294336,
+        "samples": 839
+      },
+      "fixtures": [
+        {
+          "id": "portrait-wind",
+          "timingsMs": [
+            13931.800000000047
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 89.29999999993015,
+            "decontamination": 45.800000000046566
+          }
+        },
+        {
+          "id": "portrait-dark-hair",
+          "timingsMs": [
+            13977.899999999907
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 163.40000000002328,
+            "decontamination": 71.5
+          }
+        },
+        {
+          "id": "person-urban",
+          "timingsMs": [
+            13118.300000000047
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "tabby-clutter",
+          "timingsMs": [
+            12304.300000000047
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 190.89999999990687,
+            "decontamination": 101.30000000004657
+          }
+        },
+        {
+          "id": "gray-cat",
+          "timingsMs": [
+            12384.800000000047
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 149.69999999995343,
+            "decontamination": 143.19999999995343
+          }
+        },
+        {
+          "id": "chow-fur",
+          "timingsMs": [
+            12382.300000000047
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 144.30000000004657,
+            "decontamination": 68.39999999990687
+          }
+        },
+        {
+          "id": "dog-trail",
+          "timingsMs": [
+            12987
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 163.79999999981374,
+            "decontamination": 62.700000000186265
+          }
+        },
+        {
+          "id": "vase-white",
+          "timingsMs": [
+            13334.199999999953
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "teapot-clutter",
+          "timingsMs": [
+            13333.199999999953
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "tinted-lenses",
+          "timingsMs": [
+            13697.699999999953
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "backpack",
+          "timingsMs": [
+            12983.300000000047
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-white",
+          "timingsMs": [
+            13075.600000000093
+          ],
+          "scores": {
+            "iou": 0.9970859332932122,
+            "boundaryF": 1
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-low-contrast",
+          "timingsMs": [
+            12426.300000000047
+          ],
+          "scores": {
+            "iou": 0.9975593521189261,
+            "boundaryF": 1
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "glass-stemware",
+          "timingsMs": [
+            12628.100000000093
+          ],
+          "scores": {
+            "iou": 0.399859345958708,
+            "boundaryF": 0.6898664389319583
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "fuzzy-toy",
+          "timingsMs": [
+            13177.59999999986
+          ],
+          "scores": {
+            "iou": 0.9713980062070912,
+            "boundaryF": 0.938197716915331
+          },
+          "guidedScores": {
+            "iou": 0.9569049605716233,
+            "boundaryF": 0.7484107228794022
+          },
+          "refinementMs": {
+            "guided": 122.30000000004657,
+            "decontamination": 64.80000000004657
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "model": "birefnet-lite",
+      "backend": "wasm",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 4623.899999999907,
+        "sessionMs": 7285.100000000093,
+        "loadMs": 11923.600000000093,
+        "adapter": null
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 274366464,
+        "peakBytes": 4744737792,
+        "peakDeltaBytes": 4470371328,
+        "samples": 365
+      },
+      "fixtures": [],
+      "errors": [
+        {
+          "fixture": "portrait-wind",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "portrait-dark-hair",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "person-urban",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "tabby-clutter",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "gray-cat",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "chow-fur",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "dog-trail",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "vase-white",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "teapot-clutter",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "tinted-lenses",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "backpack",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "product-white",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "product-low-contrast",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "glass-stemware",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        },
+        {
+          "fixture": "fuzzy-toy",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc\n    at G (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:11349)\n    at hr (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:25860)\n    at async An.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:3:33231)\n    at async Qa.run (http://127.0.0.1:34427/dev/bg-bench/bundle/ort.wasm.bundle.min-NIU7EXL6.js:1:18207)\n    at async Object.Q [as predict] (http://127.0.0.1:34427/dev/bg-bench/bundle/worker.js:1:6839)"
+        }
+      ]
+    },
+    {
+      "model": "bria-rmbg",
+      "backend": "wasm",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 5167.90000000014,
+        "sessionMs": 2212.2999999998137,
+        "loadMs": 7427.899999999907,
+        "adapter": null
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 215986176,
+        "peakBytes": 1163427840,
+        "peakDeltaBytes": 947441664,
+        "samples": 1663
+      },
+      "fixtures": [
+        {
+          "id": "portrait-wind",
+          "timingsMs": [
+            22684.899999999907
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "portrait-dark-hair",
+          "timingsMs": [
+            44394.799999999814
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "person-urban",
+          "timingsMs": [
+            23485.700000000186
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "tabby-clutter",
+          "timingsMs": [
+            24204.90000000014
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "gray-cat",
+          "timingsMs": [
+            36698.60000000009
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "chow-fur",
+          "timingsMs": [
+            42070.39999999991
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "dog-trail",
+          "timingsMs": [
+            37094.69999999995
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "vase-white",
+          "timingsMs": [
+            41419.60000000009
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "teapot-clutter",
+          "timingsMs": [
+            41720.89999999991
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "tinted-lenses",
+          "timingsMs": [
+            37846.90000000014
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "backpack",
+          "timingsMs": [
+            20419.5
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-white",
+          "timingsMs": [
+            22623.899999999907
+          ],
+          "scores": {
+            "iou": 0.9998411664734193,
+            "boundaryF": 1
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-low-contrast",
+          "timingsMs": [
+            21403.200000000186
+          ],
+          "scores": {
+            "iou": 0.9898503764414371,
+            "boundaryF": 0.750637058609392
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "glass-stemware",
+          "timingsMs": [
+            19416
+          ],
+          "scores": {
+            "iou": 0.45731357003332185,
+            "boundaryF": 0.7719231495373032
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "fuzzy-toy",
+          "timingsMs": [
+            20539.800000000047
+          ],
+          "scores": {
+            "iou": 0.9805655403786245,
+            "boundaryF": 0.9450029077292533
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

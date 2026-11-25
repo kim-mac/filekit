@@ -1,0 +1,126 @@
+{
+  "environment": {
+    "platform": "linux",
+    "kernel": "6.18.57",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCpuCount": 3,
+    "softwareWebgpu": false,
+    "wasmThreads": 1,
+    "ort": "1.25.1"
+  },
+  "repeats": 1,
+  "results": [
+    {
+      "model": "modnet",
+      "backend": "wasm",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 983.8000000000466,
+        "sessionMs": 2330.100000000093,
+        "loadMs": 3345.3000000000466,
+        "adapter": null
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 195615744,
+        "peakBytes": 559470592,
+        "peakDeltaBytes": 363854848,
+        "samples": 160
+      },
+      "fixtures": [
+        {
+          "id": "portrait-wind",
+          "timingsMs": [
+            3387
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 320.30000000004657,
+            "decontamination": 204.5
+          }
+        },
+        {
+          "id": "portrait-dark-hair",
+          "timingsMs": [
+            4154.699999999953
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 500.80000000004657,
+            "decontamination": 198.4000000001397
+          }
+        },
+        {
+          "id": "tabby-clutter",
+          "timingsMs": [
+            4906.5
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 459.10000000009313,
+            "decontamination": 214.5
+          }
+        },
+        {
+          "id": "gray-cat",
+          "timingsMs": [
+            4045.899999999907
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 585.7000000001863,
+            "decontamination": 213.39999999990687
+          }
+        },
+        {
+          "id": "chow-fur",
+          "timingsMs": [
+            3038.899999999907
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 241.5999999998603,
+            "decontamination": 102.4000000001397
+          }
+        },
+        {
+          "id": "dog-trail",
+          "timingsMs": [
+            2691.4000000001397
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": {
+            "guided": 677.8000000000466,
+            "decontamination": 477.89999999990687
+          }
+        },
+        {
+          "id": "fuzzy-toy",
+          "timingsMs": [
+            4632
+          ],
+          "scores": {
+            "iou": 0.9616576433307218,
+            "boundaryF": 0.8513159510425887
+          },
+          "guidedScores": {
+            "iou": 0.9469895516650941,
+            "boundaryF": 0.6385223434561651
+          },
+          "refinementMs": {
+            "guided": 315.19999999995343,
+            "decontamination": 218.89999999990687
+          }
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

@@ -1,0 +1,174 @@
+{
+  "environment": {
+    "platform": "linux",
+    "kernel": "6.18.57",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCpuCount": 3,
+    "softwareWebgpu": true,
+    "wasmThreads": 1,
+    "ort": "1.25.1"
+  },
+  "repeats": 1,
+  "results": [
+    {
+      "model": "u2netp",
+      "backend": "webgpu",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 140.60000000009313,
+        "sessionMs": 3590.3000000000466,
+        "loadMs": 4294.800000000047,
+        "adapter": {
+          "vendor": "google",
+          "architecture": "swiftshader",
+          "device": "",
+          "description": "",
+          "software": true
+        }
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 238724096,
+        "peakBytes": 942270464,
+        "peakDeltaBytes": 703546368,
+        "samples": 372
+      },
+      "fixtures": [],
+      "errors": [
+        {
+          "fixture": "portrait-wind",
+          "error": "Error: portrait-wind timed out after 90000 ms"
+        }
+      ]
+    },
+    {
+      "model": "modnet",
+      "backend": "webgpu",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 853.8999999999069,
+        "sessionMs": 3517.5,
+        "loadMs": 4962.899999999907,
+        "adapter": {
+          "vendor": "google",
+          "architecture": "swiftshader",
+          "device": "",
+          "description": "",
+          "software": true
+        }
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 255386624,
+        "peakBytes": 920146944,
+        "peakDeltaBytes": 664760320,
+        "samples": 374
+      },
+      "fixtures": [],
+      "errors": [
+        {
+          "fixture": "portrait-wind",
+          "error": "Error: portrait-wind timed out after 90000 ms"
+        }
+      ]
+    },
+    {
+      "model": "isnet",
+      "backend": "webgpu",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 5746,
+        "sessionMs": 8777.199999999953,
+        "loadMs": 14588.800000000047,
+        "adapter": {
+          "vendor": "google",
+          "architecture": "swiftshader",
+          "device": "",
+          "description": "",
+          "software": true
+        }
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 265083904,
+        "peakBytes": 1707508736,
+        "peakDeltaBytes": 1442424832,
+        "samples": 311
+      },
+      "fixtures": [],
+      "errors": [
+        {
+          "fixture": "portrait-wind",
+          "error": "Error: portrait-wind timed out after 90000 ms"
+        }
+      ]
+    },
+    {
+      "model": "birefnet-lite",
+      "backend": "webgpu",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 21363.399999999907,
+        "sessionMs": 57425.80000000005,
+        "loadMs": 79023.1000000001,
+        "adapter": {
+          "vendor": "google",
+          "architecture": "swiftshader",
+          "device": "",
+          "description": "",
+          "software": true
+        }
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 272210944,
+        "peakBytes": 2430107648,
+        "peakDeltaBytes": 2157896704,
+        "samples": 841
+      },
+      "fixtures": [],
+      "errors": [
+        {
+          "fixture": "portrait-wind",
+          "error": "Error: page.evaluate: Error: failed to call OrtRun(). ERROR_CODE: 1, ERROR_MESSAGE: /mnt/vss/_work/1/s/onnxruntime/core/providers/webgpu/shader_helper.cc:293 ShaderVariableHelper &onnxruntime::webgpu::ShaderHelper::AddVariableImpl(bool, const std::string &, ShaderUsage, const TensorShape &, uint32_t) numbers_storage_buffers_ <= limits_.maxStorageBuffersPerShaderStage was false. Too many storage buffers in shader. Current: 11, Max is 10\n\n    at W (http://127.0.0.1:39811/dev/bg-bench/bundle/ort.webgpu.bundle.min-I27BK74D.js:3:30889)\n    at yn (http://127.0.0.1:39811/dev/bg-bench/bundle/ort.webgpu.bundle.min-I27BK74D.js:4:28695)\n    at async zo.run (http://127.0.0.1:39811/dev/bg-bench/bundle/ort.webgpu.bundle.min-I27BK74D.js:4:36371)\n    at async wo.run (http://127.0.0.1:39811/dev/bg-bench/bundle/ort.webgpu.bundle.min-I27BK74D.js:1:18226)\n    at async Object.Q [as predict] (http://127.0.0.1:39811/dev/bg-bench/bundle/worker.js:1:6944)"
+        },
+        {
+          "fixture": "portrait-dark-hair",
+          "error": "Error: portrait-dark-hair timed out after 90000 ms"
+        }
+      ]
+    },
+    {
+      "model": "bria-rmbg",
+      "backend": "webgpu",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 4031.3000000000466,
+        "sessionMs": 7531.699999999953,
+        "loadMs": 12278.199999999953,
+        "adapter": {
+          "vendor": "google",
+          "architecture": "swiftshader",
+          "device": "",
+          "description": "",
+          "software": true
+        }
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 226239488,
+        "peakBytes": 2439323648,
+        "peakDeltaBytes": 2213084160,
+        "samples": 404
+      },
+      "fixtures": [],
+      "errors": [
+        {
+          "fixture": "portrait-wind",
+          "error": "Error: portrait-wind timed out after 90000 ms"
+        }
+      ]
+    }
+  ]
+}

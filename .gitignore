@@ -8,3 +8,5 @@
 /coverage/
 
 /public/workers/
+
+/.cache/bg-bench/

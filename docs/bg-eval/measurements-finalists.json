@@ -1,0 +1,129 @@
+{
+  "environment": {
+    "platform": "linux",
+    "kernel": "6.18.57",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCpuCount": 3,
+    "softwareWebgpu": false,
+    "wasmThreads": 1,
+    "ort": "1.25.1"
+  },
+  "repeats": 2,
+  "results": [
+    {
+      "model": "u2netp",
+      "backend": "wasm",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 126.69999999995343,
+        "sessionMs": 651.3000000000466,
+        "loadMs": 820.5,
+        "adapter": null
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 277932032,
+        "peakBytes": 623831040,
+        "peakDeltaBytes": 345899008,
+        "samples": 47
+      },
+      "fixtures": [
+        {
+          "id": "portrait-wind",
+          "timingsMs": [
+            2036.2000000001863,
+            1732.1999999999534
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-low-contrast",
+          "timingsMs": [
+            1559.3000000000466,
+            1580.1999999999534
+          ],
+          "scores": {
+            "iou": 0.989936473992075,
+            "boundaryF": 0.9990291225494544
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "fuzzy-toy",
+          "timingsMs": [
+            1567.6000000000931,
+            1600.1999999999534
+          ],
+          "scores": {
+            "iou": 0.9420106679035251,
+            "boundaryF": 0.680317087357064
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        }
+      ],
+      "errors": []
+    },
+    {
+      "model": "modnet",
+      "backend": "wasm",
+      "browser": "156.0.8078.79",
+      "load": {
+        "weightsMs": 349.5,
+        "sessionMs": 626.8000000000466,
+        "loadMs": 996,
+        "adapter": null
+      },
+      "memory": {
+        "method": "browsertree-linux-pss-250ms",
+        "baselineBytes": 279046144,
+        "peakBytes": 556409856,
+        "peakDeltaBytes": 277363712,
+        "samples": 36
+      },
+      "fixtures": [
+        {
+          "id": "portrait-wind",
+          "timingsMs": [
+            963.5999999998603,
+            876.6000000000931
+          ],
+          "scores": null,
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "product-low-contrast",
+          "timingsMs": [
+            1365.8000000000466,
+            1359.6999999999534
+          ],
+          "scores": {
+            "iou": 0.0017154293338416087,
+            "boundaryF": 0.08414634146341465
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        },
+        {
+          "id": "fuzzy-toy",
+          "timingsMs": [
+            1305.6000000000931,
+            1266.3000000000466
+          ],
+          "scores": {
+            "iou": 0.9616576433307218,
+            "boundaryF": 0.8513159510425887
+          },
+          "guidedScores": null,
+          "refinementMs": null
+        }
+      ],
+      "errors": []
+    }
+  ]
+}
