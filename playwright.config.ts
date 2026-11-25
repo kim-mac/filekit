@@ -4,6 +4,7 @@ const baseURL = 'http://127.0.0.1:4173';
 
 export default defineConfig({
   testDir: './test/e2e',
+  snapshotPathTemplate: '{testDir}/../screenshots/{projectName}/{arg}{ext}',
   reporter: 'list',
   forbidOnly: Boolean(process.env.CI),
   workers: 2,
