@@ -92,7 +92,7 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   await page.getByLabel('Image files').setInputFiles({
     name: 'private-bg-fixture.jpg', mimeType: 'image/jpeg', buffer: await fixtureBytes('bg/portrait-wind.jpg'),
   });
-  await page.getByRole('button', { name: /private-bg-fixture\.jpg/ }).click();
+  await page.getByRole('button', { name: /^private-bg-fixture\.jpg/ }).click();
   await waitForImage(page, 'private-bg-fixture.jpg');
   await button('Remove background').click();
   await button('Apply remove background').click();
