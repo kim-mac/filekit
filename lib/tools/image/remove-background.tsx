@@ -47,6 +47,6 @@ export const removeBackgroundTool: ToolDefinition<ImageState, BackgroundOptions,
   },
   async apply(input, options) {
     if (!options.mask) throw new Error('Generate a background mask before applying this edit.');
-    return { ...input, backgroundEdit: options };
+    return { ...input, backgroundEdit: options, backgroundAfterBlur: input.blurEdits?.length };
   },
 };

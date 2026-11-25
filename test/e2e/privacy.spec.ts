@@ -1,12 +1,12 @@
 import { expect, test, type Request } from '@playwright/test';
-import { downloadResult, fixtureBytes, pick, waitForImage } from './helpers';
+import { downloadResult, fileRow, fixtureBytes, pick, waitForImage } from './helpers';
 
 test.use({ serviceWorkers: 'block' });
 
-test('lazy codec assets stay same origin and files never enter HTTP requests', async ({ page, context, baseURL }) => {
+test('lazy codec and face detection assets stay same origin and files never enter HTTP requests', async ({ page, context, baseURL }) => {
   const origin = new URL(baseURL!).origin;
-  const fixtures = ['oriented.jpg', 'reference.heic', 'animated.gif', 'transparent.png', 'reference.webp', 'reference.avif'];
-  const markers = [...fixtures, 'filekit-private-fixture-marker'];
+  const fixtures = ['oriented.jpg', 'reference.heic', 'animated.gif', 'transparent.png', 'reference.webp', 'reference.avif', 'bg/person-urban.jpg'];
+  const markers = [...fixtures.map((name) => name.split('/').at(-1)!), 'filekit-private-fixture-marker'];
   const bytes = await Promise.all(fixtures.map(fixtureBytes));
   for (const file of bytes) {
     markers.push(file.toString('hex'), file.toString('base64'), file.toString('base64url'));
@@ -31,7 +31,7 @@ test('lazy codec assets stay same origin and files never enter HTTP requests', a
     }
     const lower = decoded.toLowerCase();
     const blocked = new URL(url).origin !== origin ||
-      request.postDataBuffer() !== null || markers.some((marker) => lower.includes(marker.toLowerCase()));
+      request.method() !== 'GET' || request.postDataBuffer() !== null || markers.some((marker) => lower.includes(marker.toLowerCase()));
     if (blocked) violations.add(`${request.method()} ${url}`);
     return blocked;
   }
@@ -51,9 +51,19 @@ test('lazy codec assets stay same origin and files never enter HTTP requests', a
   await page.getByRole('button', { name: 'Apply crop' }).click();
   await expect(page.getByRole('button', { name: 'Export ZIP' })).toBeEnabled();
   expect((await downloadResult(page, 'Export ZIP')).bytes.length).toBeGreaterThan(0);
+  const faceModel = /\/face-models\/yunet\.onnx$/;
+  await fileRow(page, 'person-urban.jpg').getByRole('button', { name: /^person-urban\.jpg/ }).click();
+  await page.getByRole('button', { name: 'Blur', exact: true }).click();
+  await waitForImage(page, 'person-urban.jpg');
+  expect([...requests].filter(url => faceModel.test(url))).toEqual([]);
+  await page.getByRole('button', { name: 'Detect faces' }).click();
+  await expect(page.getByText('1 face detected.', { exact: true })).toBeVisible({ timeout: 15_000 });
+
   expect([...violations]).toEqual([]);
   expect([...requests]).toEqual(expect.arrayContaining([
     expect.stringMatching(/\/workers\/image\.worker\.js$/),
     expect.stringMatching(/\/workers\/mozjpeg_dec-.*\.wasm$/),
+    expect.stringMatching(faceModel),
+    expect.stringMatching(/\/bg-runtime\/onnx\/ort-wasm-simd-threaded\.wasm$/),
   ]));
 });

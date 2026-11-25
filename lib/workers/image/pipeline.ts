@@ -2,8 +2,9 @@ import { Zip, ZipPassThrough } from 'fflate';
 import { sameBackground, type BackgroundOptions } from '../../tools/image/background-options';
 import { compositeBackground } from './background';
 import { imageTools } from '../../tools/image';
-import { defaultConvertOptions, defaultOutput, outputName, type ConvertOptions } from '../../tools/image/formats';
-import { fullGeometry, geometrySize, sameGeometry, scaleGeometry, type ImageGeometry } from '../../tools/image/geometry';
+import { defaultConvertOptions, defaultOutput, outputName, type ConvertOptions, type ImageState } from '../../tools/image/formats';
+import { fullGeometry, geometrySize, sameGeometry, scaleGeometry, type ImageGeometry, type Size } from '../../tools/image/geometry';
+import { applyRegionBlur } from './blur';
 import { decodeImage, encodeImage } from './codecs';
 import { flatten, hasTransparency, previewMaxEdge, renderGeometry, resizePreview } from './pixels';
 import type {
@@ -22,7 +23,7 @@ interface PreviewSource {
   readonly base: ImageData;
   readonly hasAlpha: boolean;
   fullFrame?: ImageData;
-  rendered?: { geometry: ImageGeometry; background?: string; edit?: BackgroundOptions; blob: Blob; hasAlpha: boolean };
+  rendered?: { geometry: ImageGeometry; background?: string; edit?: BackgroundOptions; blurKey: string; blob: Blob; hasAlpha: boolean };
 }
 
 let activePreview: PreviewSource | undefined;
@@ -88,34 +89,58 @@ async function encodePreview(frame: ImageData, hasAlpha: boolean, sourceFormat: 
   return encodeImage(frame, defaultConvertOptions);
 }
 
+async function previewState(source: PreviewSource, commands: ImageRequest['commands']) {
+  const state = await imageTools.replay({
+    geometry: fullGeometry(source), output: defaultOutput(source.format),
+  }, commands);
+  return { ...state, output: outputForBackground(state.output, state.backgroundEdit, commands) };
+}
+
+async function previewRaster(source: PreviewSource, state: ImageState) {
+  const { geometry, backgroundEdit, blurEdits, output } = state;
+  if (blurEdits) source.fullFrame = undefined;
+  const maxEdge = backgroundEdit?.mask?.outputMaxEdge;
+  const base = maxEdge ? resizePreview(source.base, maxEdge) : source.base;
+  const composed = backgroundEdit || blurEdits
+    ? await applyRasterEdits(new ImageData(base.data.slice(), base.width, base.height), source, state)
+    : base;
+  let frame = renderGeometry(composed, scaleGeometry(geometry, source, base));
+  const hasAlpha = Boolean(source.hasAlpha || backgroundEdit) && hasTransparency(frame);
+  const background = hasAlpha && output.format === 'jpeg' ? output.background : undefined;
+  if (background) {
+    if (frame === source.base) frame = new ImageData(base.data.slice(), base.width, base.height);
+    flatten(frame, background);
+  }
+  return { frame, hasAlpha, background };
+}
+
+export async function renderDraft({ id, commands }: Pick<ImageRequest, 'id' | 'commands'>) {
+  const source = activePreview;
+  if (source?.id !== id) return;
+  // Drafts are bounded by the cached preview and never overwrite it.
+  source.fullFrame = undefined;
+  const { frame } = await previewRaster(source, await previewState(source, commands));
+  if (activePreview !== source) return;
+  return frame === source.base ? new ImageData(frame.data.slice(), frame.width, frame.height) : frame;
+}
+
 export async function renderPreview(request: PreviewRequest, progress: ProgressCallback): Promise<PreviewResult> {
   const report: ReportStage = (stage) => progress({ id: request.id, stage, index: 1, total: 1 });
   const source = await previewSource(request, report);
-  const { base, format } = source;
   report('Rendering preview');
-  const { geometry, output: conversion, backgroundEdit } = await imageTools.replay({
-    geometry: fullGeometry(source), output: defaultOutput(format),
-  }, request.commands);
-  const output = outputForBackground(conversion, backgroundEdit, request);
+  const state = await previewState(source, request.commands);
+  const { geometry, output, backgroundEdit, blurEdits } = state;
+  const { format } = source;
   const maxEdge = backgroundEdit?.mask?.outputMaxEdge;
-  const previewBase = maxEdge ? resizePreview(base, maxEdge) : base;
-  const dimensions = maxEdge ? cappedSize(source, maxEdge) : source;
-  const outputGeometry = maxEdge ? scaleGeometry(geometry, source, dimensions) : geometry;
+  const outputGeometry = maxEdge ? scaleGeometry(geometry, source, cappedSize(source, maxEdge)) : geometry;
+  const blurKey = blurEdits ? JSON.stringify([state.backgroundAfterBlur, blurEdits]) : '';
   let rendered = source.rendered;
   const expectedBackground = rendered?.hasAlpha && output.format === 'jpeg' ? output.background : undefined;
   if (!rendered || !sameGeometry(rendered.geometry, geometry) || rendered.background !== expectedBackground ||
-    !sameBackground(rendered.edit, backgroundEdit)) {
-    const composed = backgroundEdit
-      ? await compositeBackground(new ImageData(previewBase.data.slice(), previewBase.width, previewBase.height), backgroundEdit)
-      : previewBase;
-    let preview = renderGeometry(composed, scaleGeometry(geometry, source, previewBase));
-    const hasAlpha = Boolean(source.hasAlpha || backgroundEdit) && hasTransparency(preview);
-    const background = hasAlpha && output.format === 'jpeg' ? output.background : undefined;
-    if (background) {
-      if (preview === base) preview = new ImageData(base.data.slice(), base.width, base.height);
-      flatten(preview, background);
-    }
-    rendered = { geometry, edit: backgroundEdit, background, hasAlpha, blob: await encodePreview(preview, hasAlpha && !background, format) };
+    !sameBackground(rendered.edit, backgroundEdit) || rendered.blurKey !== blurKey) {
+    const { frame, hasAlpha, background } = await previewRaster(source, state);
+    const blob = await encodePreview(frame, hasAlpha && !background, format);
+    rendered = { geometry, edit: backgroundEdit, blurKey, background, hasAlpha, blob };
     source.rendered = rendered;
   }
   return { blob: rendered.blob, info: { ...geometrySize(outputGeometry), hasAlpha: rendered.hasAlpha, format, output,
@@ -127,11 +152,23 @@ function cappedSize(frame: { width: number; height: number }, edge: number) {
   return { width: Math.max(1, Math.floor(frame.width * scale)), height: Math.max(1, Math.floor(frame.height * scale)) };
 }
 
-function outputForBackground(output: ConvertOptions, edit: BackgroundOptions | undefined, request: ImageRequest): ConvertOptions {
+function outputForBackground(output: ConvertOptions, edit: BackgroundOptions | undefined, commands: ImageRequest['commands']): ConvertOptions {
   if (!edit) return output;
-  const explicitFormat = request.commands.some(command => command.toolId === 'convert');
+  const explicitFormat = commands.some(command => command.toolId === 'convert');
   const format = edit.mode === 'transparent' && output.format === 'jpeg' && !explicitFormat ? 'png' : output.format;
   return { ...output, format, background: edit.color };
+}
+
+async function applyRasterEdits(frame: ImageData, original: Size, state: ImageState) {
+  const { blurEdits = [], backgroundEdit, backgroundAfterBlur = 0 } = state;
+  // The background tool replaces its previous settings. Keep the latest
+  // matte in source coordinates, at its position among the region blurs.
+  for (let index = 0; index <= blurEdits.length; index++) {
+    if (backgroundEdit && index === backgroundAfterBlur) await compositeBackground(frame, backgroundEdit);
+    const edit = blurEdits[index];
+    if (edit) applyRegionBlur(frame, edit.options, geometrySize(edit.geometry), scaleGeometry(edit.geometry, original, frame));
+  }
+  return frame;
 }
 
 async function prepareExport(request: ImageRequest, report: ReportStage) {
@@ -140,17 +177,19 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
   // existing in-place EXIF/crop path for files without a background edit.
   const hasBackground = request.commands.some(command => command.toolId === 'remove-background');
   const { frame: original, format, orientation } = await decodeOriginal(request.original, report, hasBackground);
-  const { geometry, output: conversion, backgroundEdit } = await imageTools.replay({
+  const state = await imageTools.replay({
     geometry: fullGeometry(original, hasBackground ? 1 : orientation), output: defaultOutput(format),
   }, request.commands);
-  const output = outputForBackground(conversion, backgroundEdit, request);
+  const { geometry, output: conversion, backgroundEdit, blurEdits } = state;
+  const output = outputForBackground(conversion, backgroundEdit, request.commands);
   // The AVIF wrapper reads the entire backing buffer, so crops need a dense raster.
   const mode = output.format === 'avif' ? 'orient' : 'compact';
-  if (!backgroundEdit) return { frame: renderGeometry(original, geometry, mode), output };
-  const maxEdge = backgroundEdit.mask?.outputMaxEdge;
+  if (!backgroundEdit && !blurEdits) return { frame: renderGeometry(original, geometry, mode), output };
+  const maxEdge = backgroundEdit?.mask?.outputMaxEdge;
   const bounded = maxEdge ? resizePreview(original, maxEdge) : original;
   const mapped = maxEdge ? scaleGeometry(geometry, original, bounded) : geometry;
-  await compositeBackground(bounded, backgroundEdit);
+  report('Applying edits');
+  await applyRasterEdits(bounded, original, state);
   return { frame: renderGeometry(bounded, mapped, mode), output };
 }
 

@@ -1,4 +1,5 @@
 import type { BackgroundOptions } from './background-options';
+import type { BlurEdit } from './blur-options';
 import type { ImageGeometry } from './geometry';
 
 export const outputFormats = {
@@ -20,6 +21,8 @@ export interface ConvertOptions {
 export interface ImageState {
   readonly geometry: ImageGeometry;
   readonly backgroundEdit?: BackgroundOptions;
+  readonly backgroundAfterBlur?: number;
+  readonly blurEdits?: readonly BlurEdit[];
   readonly output: ConvertOptions;
 }
 

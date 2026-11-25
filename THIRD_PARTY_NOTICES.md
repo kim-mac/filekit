@@ -13,3 +13,11 @@ FileKit's image background removal bundles the bg0 browser library, Transformers
 | [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) | MIT, Microsoft Corporation. [License](licenses/bg0/ONNX-Runtime-MIT.txt), [third-party notices](licenses/bg0/ONNX-Runtime-ThirdPartyNotices.txt) |
 
 FileKit passes PNG to bg0 after normalizing the source with FileKit's existing codecs. bg0's separate HEIC decoder is outside the vendored distribution. The development-only benchmark has its own [fixture attributions](test/fixtures/bg/SOURCES.md) and [checkpoint provenance](docs/bg-removal-eval.md).
+
+## Face detection
+
+| Component | License and attribution |
+| --- | --- |
+| [YuNet ONNX weights](https://github.com/ShiqiYu/libfacedetection.train/blob/a61a428929148171b488f024b5d6774f93cdbc13/tasks/task1/onnx/yunet.onnx) | MIT, Shiqi Yu and upstream contributors. [Original license](https://github.com/ShiqiYu/libfacedetection.train/blob/a61a428929148171b488f024b5d6774f93cdbc13/LICENSE), [distributed copy](public/face-models/YuNet-MIT.txt). |
+
+FileKit distributes the 344,799-byte checkpoint without changes. The worker verifies SHA-256 `be449cd884ae1bc17e089b78e132e80df959b88452f32c487c6fb0a8c8e27f14` and runs inference using the bundled ONNX Runtime Web WASM runtime. FileKit’s anchor decoding follows the author’s [model configuration](https://github.com/ShiqiYu/libfacedetection.train/blob/a61a428929148171b488f024b5d6774f93cdbc13/tasks/task1/config.py) and [detector](https://github.com/ShiqiYu/libfacedetection.train/blob/a61a428929148171b488f024b5d6774f93cdbc13/tasks/task1/detect.py). The face detection test uses [Didi Medina’s CC0 portrait](test/fixtures/bg/SOURCES.md).

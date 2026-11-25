@@ -4,3 +4,6 @@
   Content-Security-Policy: default-src 'self'; connect-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:
 /bg-runtime/ios/worker.mjs
   Content-Security-Policy: default-src 'self'; connect-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:
+
+/workers/faces.worker.js
+  Content-Security-Policy: default-src 'self'; connect-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:

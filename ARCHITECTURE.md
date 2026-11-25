@@ -76,9 +76,9 @@ interface EditCommand {
 }
 ```
 
-The category registry lists tools in toolbar order, looks them up by stable ID, and rejects duplicate IDs or a category mismatch. The image registry registers Convert, Crop, and Remove background. Add a tool by creating its plugin module and registering it. Open the options panel using the registry entry and resolve commands through the same registry in the worker. Keep plugin modules safe to import in the worker and load dependencies that need the DOM inside the UI path. Pass commands as plain structured-cloneable data.
+The category registry lists tools in toolbar order, looks them up by stable ID, and rejects duplicate IDs or a category mismatch. The image registry registers Convert, Crop, Blur, and Remove background. Add a tool by creating its plugin module and registering it. Open the options panel using the registry entry and resolve commands through the same registry in the worker. Keep plugin modules safe to import in the worker and load dependencies that need the DOM inside the UI path. Pass commands as plain structured-cloneable data.
 
-Image plugins replay geometry and export settings. Crop composes source bounds and orientation. Convert updates the output format and quality. Remove background stores a compact matte and the background appearance. The matte maps to the EXIF-normalized original, so format, crop, and background can replay in either order. The pipeline materializes the final geometry from one raster after replay. The final export encodes once after replaying all edits, so undo, redo, and repeated export avoid cumulative quality loss.
+Image plugins replay geometry and export settings. Crop composes source bounds and orientation. Convert updates the output format and quality. Remove background stores a compact matte and the background appearance. The matte maps to the EXIF-normalized original, so format, crop, and background can replay in either order. Blur records the geometry at each region edit. The pipeline materializes the final geometry from one raster after replay. The final export encodes once after replaying all edits, so undo, redo, and repeated export avoid cumulative quality loss.
 
 ## Edit history and rendering
 
@@ -123,6 +123,16 @@ A new full-size transposed raster would use 91.55 MiB. Export composes EXIF with
 Raster subtotals count live buffers owned by FileKit. The browser, compressed blobs, GPU surfaces, and WASM linear memory add to process memory. The Chromium performance test also logs the Linux renderer high-water RSS before intake and after plain and rotated exports. RSS includes earlier work and the browser runtime. Mobile profiles run on the desktop test host.
 
 Bundle scripts, fonts if needed, worker modules, and WASM as same-origin static assets. Load each WASM codec on first use from same-origin static assets. Allow same-origin GET requests for bundled JS, WASM, and verified static model assets. Reject any request to an external domain, any request with a body, and any request whose URL contains file names or file data. Keep all file data, names, metadata, previews, and results in the browser. Generate downloads from local blobs. The app has zero uploads, API routes, accounts, or tracking.
+
+## Region blur
+
+The Blur plugin records brush and eraser paths, rectangles, and ellipses as normalized coordinates in the oriented frame at the time of editing. Brush diameter scales with the shorter edge. The worker projects the edit’s geometry onto the preview or export raster and applies its mask through a strided view of the original. Crops, rotations, and flips before a blur define its frame. Later geometry carries the modified pixels along. Undo and redo replay the active command prefix. Background masks keep their source coordinates and the latest background replacement takes effect at its position among the blur commands.
+
+The worker builds a one-bit mask and applies either origin-aligned pixelation or a Gaussian approximation using three separable box filters with running sums. Strength and block size scale with the image. The effect preserves alpha and weights neighboring colors by alpha. Gaussian scratch storage uses two one-byte planes for opaque input and an additional one-byte plane for transparency. A fully selected 6000 × 4000 opaque image needs 48 MB of scratch in addition to the decoded raster and cached preview base. A region mask uses at most 3 MB at that size. Blur has full-resolution export on both desktop and mobile.
+
+Drafts and committed previews share the raster renderer. The image worker returns a transferable, bounded ImageData to the editor while the user draws. Full-resolution export replays those edits against the decoded original through the WASM codec path. Two-finger touch gestures cancel any in-progress stroke and pan or zoom the editor.
+
+The Detect faces button starts a dedicated worker with a preview of the current frame. The worker lazily fetches and verifies the same-origin YuNet weights and uses the shared ONNX Runtime Web WASM assets for inference. It returns normalized boxes that the user can adjust or remove before applying the edit. [Model provenance and license](THIRD_PARTY_NOTICES.md#face-detection).
 
 ## Background removal
 

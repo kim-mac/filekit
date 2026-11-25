@@ -293,3 +293,46 @@ button, a, label { touch-action: manipulation; }
 .home-footer {
   margin-top: 2rem;
 }
+
+.blur-editor {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  container-type: size;
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
+}
+.preview-stage:has(.blur-editor) .preview-image { opacity: 0; }
+.blur-frame { position: relative; isolation: isolate; }
+.blur-source, .blur-stroke-guide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.blur-stroke-guide { fill: rgb(255 255 255 / .35); stroke: rgb(255 255 255 / .35); }
+.blur-stroke-guide.eraser { fill: rgb(0 0 0 / .36); stroke: rgb(0 0 0 / .36); }
+.blur-cursor, .blur-shape { position: absolute; border: 1px solid white; box-shadow: 0 0 0 1px rgb(0 0 0 / .65); }
+.blur-cursor { pointer-events: none; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); }
+.blur-shape { cursor: move; }
+.blur-shape:not([data-blur-shape]), .blur-editor.painting .blur-shape { pointer-events: none; }
+.blur-shape.ellipse { border-radius: 50%; }
+.blur-shape.selected { border-color: #86bbff; border-width: 2px; z-index: 1; }
+.blur-handle { position: absolute; display: grid; place-items: center; width: 28px; height: 28px; cursor: nwse-resize; }
+.blur-handle.start { left: 0; top: 0; transform: translate(-50%, -50%); }
+.blur-handle.end { right: 0; bottom: 0; transform: translate(50%, 50%); }
+.blur-handle::after { content: ''; width: 9px; height: 9px; border: 1px solid #244373; border-radius: 50%; background: white; }
+.blur-modes, .blur-effects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.blur-modes .button { justify-content: flex-start; }
+.blur-modes button[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.blur-invert { display: flex; align-items: center; min-height: 44px; gap: 8px; font-size: .85rem; cursor: pointer; }
+.blur-invert input { accent-color: var(--accent); }
+.blur-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (pointer: coarse) {
+  .blur-handle { width: 44px; height: 44px; }
+  .blur-handle.start { transform: translate(-65%, -65%); }
+  .blur-handle.end { transform: translate(65%, 65%); }
+  .blur-handle.start::after { transform: translate(7px, 7px); }
+  .blur-handle.end::after { transform: translate(-7px, -7px); }
+}
+@media (width < 840px) {
+  .workspace-sidebar .settings-panel:has(.blur-options) { order: -1; }
+}

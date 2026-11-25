@@ -22,4 +22,6 @@ Fixture IDs match [fixtures.json](fixtures.json). Photos were rotated using EXIF
 
 The synthetic images and their masks are dedicated under CC0 1.0. The generator derives each mask from the foreground's alpha before compositing and resampling. The background includes the bottle shadows. The glass fixture simulates partial opacity and omits physical refraction. No outside assets are used in the generator.
 
+The face detector golden and browser tests use the CC0 `person-urban.jpg` portrait by Didi Medina.
+
 The photo mirrors document the original licenses. [MODNet photo credits](https://github.com/voodoohop/modnet/blob/eff345bdec5a35d3277677b4f71f57b693bc0b9b/README.md), [Posegraph photo credits](https://github.com/extrant/Posegraph/blob/9323076146db5d8221d01ef9911b85e14deb2051/docs/tutorial/README.md#sample-image-credits), [DreamBooth references and licenses](https://github.com/google/dreambooth/blob/4f887af7970a06fc0cd3adaa1d0b368547d6a1d0/dataset/references_and_licenses.txt).

@@ -83,6 +83,12 @@ export function ImageWorkspace() {
   const downloadUrl = useObjectUrl(download?.blob);
   const selectedInfo = selected?.info;
   const activeId = selected?.id;
+  const activeStack = selected?.stack;
+  const renderDraft = useCallback(async (command: EditCommand) => {
+    if (activeId && activeStack) {
+      return client.renderDraft({ id: activeId, commands: [...activeCommands(activeStack), command] });
+    }
+  }, [activeId, activeStack, client]);
   const toolsDisabled = !previewIsCurrent || selected?.status !== 'ready' || jobsLocked || Boolean(work);
 
   const updateEntry = useCallback((id: string, update: Partial<Entry>) => {
@@ -397,7 +403,8 @@ export function ImageWorkspace() {
                 registry={imageTools} context={{
                   original: selected.stack.original, releaseImageMemory: () => client.releaseFullPreview(),
                   backgroundColor: selectedInfo.backgroundColor,
-                  hasAlpha: selectedInfo.hasAlpha, size: selectedInfo, previewUrl, previewTarget, disabled: toolsDisabled,
+                  hasAlpha: selectedInfo.hasAlpha, size: selectedInfo, previewUrl, previewBlob: shownPreview?.result.blob,
+                  previewTarget, renderDraft, disabled: toolsDisabled,
                 }}
                 initialOptions={{
                   ...Object.fromEntries(activeCommands(selected.stack)

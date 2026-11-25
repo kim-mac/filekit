@@ -1,6 +1,11 @@
 import { build } from 'esbuild';
+import { createRequire } from 'node:module';
 import { readFile, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+
+const require = createRequire(import.meta.url);
+const transformers = createRequire(require.resolve('@huggingface/transformers'));
+const onnxWasm = dirname(transformers.resolve('onnxruntime-web/ort-wasm-simd-threaded.wasm'));
 
 const outdir = 'public/workers';
 await rm(outdir, { recursive: true, force: true });
@@ -9,6 +14,7 @@ await build({
   entryPoints: {
     'image.worker': 'lib/workers/image.worker.ts',
     'background.worker': 'lib/workers/bg0/background.worker.ts',
+    'faces.worker': 'lib/workers/image/faces.worker.ts',
   },
   outdir,
   bundle: true,
@@ -20,6 +26,14 @@ await build({
   assetNames: '[name]-[hash]',
   chunkNames: '[name]-[hash]',
   plugins: [{
+    name: 'shared-onnx-runtime',
+    setup(builder) {
+      // The face worker uses the same ORT version as the static background
+      // runtime assets. Load the WASM-only frontend, with no inline WASM.
+      builder.onResolve({ filter: /^onnxruntime-web\/wasm$/ }, ({ importer }) =>
+        importer.endsWith('/image/faces.ts') ? { path: resolve(onnxWasm, 'ort.wasm.min.mjs') } : undefined);
+    },
+  }, {
     name: 'wasm-codec-assets',
     setup(builder) {
       // Emscripten and wasm-bindgen locate their binaries relative to the
