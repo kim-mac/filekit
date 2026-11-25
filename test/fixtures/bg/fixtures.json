@@ -1,0 +1,17 @@
+[
+  { "id": "portrait-wind", "image": "portrait-wind.jpg", "refine": true },
+  { "id": "portrait-dark-hair", "image": "portrait-dark-hair.jpg", "refine": true },
+  { "id": "person-urban", "image": "person-urban.jpg" },
+  { "id": "tabby-clutter", "image": "tabby-clutter.jpg", "refine": true },
+  { "id": "gray-cat", "image": "gray-cat.jpg", "refine": true },
+  { "id": "chow-fur", "image": "chow-fur.jpg", "refine": true },
+  { "id": "dog-trail", "image": "dog-trail.jpg", "refine": true },
+  { "id": "vase-white", "image": "vase-white.jpg" },
+  { "id": "teapot-clutter", "image": "teapot-clutter.jpg" },
+  { "id": "tinted-lenses", "image": "tinted-lenses.jpg" },
+  { "id": "backpack", "image": "backpack.jpg" },
+  { "id": "product-white", "image": "product-white.jpg", "mask": "product-white-alpha.png" },
+  { "id": "product-low-contrast", "image": "product-low-contrast.jpg", "mask": "product-low-contrast-alpha.png" },
+  { "id": "glass-stemware", "image": "glass-stemware.jpg", "mask": "glass-stemware-alpha.png" },
+  { "id": "fuzzy-toy", "image": "fuzzy-toy.jpg", "mask": "fuzzy-toy-alpha.png", "refine": true }
+]

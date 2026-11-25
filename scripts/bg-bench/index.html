@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>FileKit background removal benchmark</title>
+<style>
+  body { font: 1rem system-ui, sans-serif; margin: 0 auto; max-width: 760px; padding: 1rem; }
+  h1 { font-size: 1.65rem; }
+  form { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; }
+  label { display: grid; gap: .25rem; }
+  select, button { min-height: 44px; font: inherit; }
+  #results { display: grid; gap: .75rem; }
+  img { width: 100%; height: auto; }
+</style>
+<h1>FileKit background removal benchmark</h1>
+<p>Run a model against the redistributable fixtures and review original, mask, and checkerboard cutout.</p>
+<form>
+  <label>Model <select id="model"></select></label>
+  <label>Backend <select id="backend"><option value="auto">Auto</option><option value="wasm">WASM</option><option value="webgpu">WebGPU</option></select></label>
+  <button type="submit">Run benchmark</button>
+</form>
+<p id="status" role="status"></p>
+<div id="results"></div>
+<script type="module" src="/dev/bg-bench/bundle/page.js"></script>
+</html>
