@@ -20,6 +20,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run build && npm run preview',
+    env: { NO_UPDATE_CHECK: '1' },
     url: baseURL,
     timeout: 120_000,
   },
