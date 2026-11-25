@@ -89,14 +89,47 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   const square = await sharp(cropped.bytes).metadata();
   expect(square.width).toBe(square.height);
   expect(square.width).toBeLessThanOrEqual(Math.min(metadata.width!, metadata.height!));
+  // Start a new workspace and worker while preserving the browser's Cache Storage.
+  await openImageWorkspace(page);
   await page.getByLabel('Image files').setInputFiles({
     name: 'private-bg-fixture.jpg', mimeType: 'image/jpeg', buffer: await fixtureBytes('bg/portrait-wind.jpg'),
   });
-  await page.getByRole('button', { name: /^private-bg-fixture\.jpg/ }).click();
   await waitForImage(page, 'private-bg-fixture.jpg');
   await button('Remove background').click();
   await button('Apply remove background').click();
   await expect(tools.getByText(/Quality mode Lite/)).toBeVisible({ timeout: 90_000 });
   expect(chunks).toBe(firstDownloadCount);
+  expect(violations).toEqual([]);
+});
+
+test('iPhone WebKit uses the quantized Lite worker and shows its output cap', async ({ page, context, baseURL }, testInfo) => {
+  test.skip(testInfo.project.name !== 'iphone-webkit' || process.env.FILEKIT_BG_E2E !== '1',
+    'Quantized Lite is staged for iPhone WebKit with FILEKIT_BG_E2E=1');
+  test.setTimeout(180_000);
+
+  const origin = new URL(baseURL!).origin;
+  const requests = new Set<string>();
+  const violations: string[] = [];
+  await context.route('**/*', route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.origin !== origin || request.method() !== 'GET' || request.postDataBuffer() ||
+      request.url().includes('portrait-wind')) {
+      violations.push(`${request.method()} ${request.url()}`);
+      return route.abort();
+    }
+    requests.add(url.pathname);
+    return route.continue();
+  });
+  await openImageWorkspace(page);
+  await pick(page, 'bg/portrait-wind.jpg');
+  await waitForImage(page, 'portrait-wind.jpg');
+  await page.getByRole('button', { name: 'Remove background', exact: true }).tap();
+  await page.getByRole('button', { name: 'Apply remove background' }).tap();
+  await expect(page.getByText('Quality mode Lite · WASM')).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByText('Maximum output edge on this device is 1280 px.')).toBeVisible();
+  const result = await downloadResult(page, 'Export image');
+  expect(await sharp(result.bytes).metadata()).toMatchObject({ format: 'png', hasAlpha: true });
+  expect(requests).toContain('/bg-runtime/ios/int8-full-512.ort.json');
   expect(violations).toEqual([]);
 });

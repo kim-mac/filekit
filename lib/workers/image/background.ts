@@ -91,10 +91,24 @@ function matteAt(
   return (wa * alpha[a] + wb * alpha[b] + wc * alpha[c] + wd * alpha[d]) / (255 * (wa + wb + wc + wd));
 }
 
-function blurredBackground(frame: ImageData, color: string) {
+function blurredBackground(
+  frame: ImageData, color: string, matte: { width: number; height: number },
+  alpha: Uint8Array, guide: Uint8ClampedArray, nearest: Int32Array,
+) {
   const small = resizePreview(frame, 256);
   const source = flatten(new ImageData(small.data.slice(), small.width, small.height), color);
   const { width, height, data } = source;
+  // Fill protected foreground with nearby background before blurring, so the
+  // blurred copy does not create a colored ghost outside the cutout.
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const cell = Math.round(axis(y, height, matte.height)) * matte.width + Math.round(axis(x, width, matte.width));
+      if (alpha[cell] <= 16 || nearest[cell] < 0) continue;
+      const index = 4 * (y * width + x);
+      const bg = 4 * nearest[cell];
+      for (let c = 0; c < 3; c++) data[index + c] = guide[bg + c];
+    }
+  }
   const radius = Math.max(1, Math.round(Math.max(width, height) * 0.055));
   const spare = new Uint8ClampedArray(data.length);
   function pass(input: Uint8ClampedArray, output: Uint8ClampedArray, horizontal: boolean) {
@@ -129,7 +143,7 @@ export async function compositeBackground(frame: ImageData, options: BackgroundO
   const guide = resizedGuide(frame, mask.width, mask.height);
   const nearest = nearestBackground(alpha, mask.width, mask.height, guide);
   const maxDistance = Math.max(8, Math.round(Math.min(mask.width, mask.height) * 0.06)) ** 2;
-  const blur = options.mode === 'blur' ? blurredBackground(frame, options.color) : undefined;
+  const blur = options.mode === 'blur' ? blurredBackground(frame, options.color, mask, alpha, guide, nearest) : undefined;
   const painted = options.mode !== 'transparent';
   const color = Number.parseInt(options.color.slice(1), 16);
   const solid = [color >> 16, color >> 8 & 255, color & 255];

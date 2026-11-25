@@ -219,14 +219,14 @@ describe('background removal compositing', () => {
 
   it('blurs the original background and preserves opaque foreground pixels', async () => {
     const frame = new ImageData(Uint8ClampedArray.of(
-      240, 20, 40, 255, 16, 40, 100, 255, 240, 20, 40, 255,
+      240, 20, 40, 255, 16, 40, 100, 255, 140, 20, 40, 255,
     ), 3, 1);
     const result = await compositeBackground(frame, {
       mode: 'blur', color: '#ffffff', mask: matte(3, 1, Uint8Array.of(0, 255, 0)),
     });
     expect(rgba(result, 1, 0)).toEqual([16, 40, 100, 255]);
     expect(rgba(result, 0, 0)[0]).toBeLessThan(240);
-    expect(rgba(result, 0, 0)[3]).toBe(255);
+    expect(rgba(result, 0, 0).slice(1)).toEqual([20, 40, 255]);
   });
 
   it.each(['png', 'webp', 'avif', 'jpeg'] as const)('replays EXIF, background and crop in either order for %s', async (format) => {
