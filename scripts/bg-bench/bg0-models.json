@@ -1,0 +1,4 @@
+[
+  { "id": "bg0-full", "name": "bg0 BiRefNet Full", "tier": "full" },
+  { "id": "bg0-lite", "name": "bg0 BiRefNet Lite", "tier": "lite" }
+]

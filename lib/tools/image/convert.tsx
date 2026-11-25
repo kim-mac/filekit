@@ -40,7 +40,10 @@ function ConvertOptionsPanel({ value, onChange, context }: {
           />
         </label>
       )}
-      {value.format === 'jpeg' && context.hasAlpha && (
+      {value.format === 'jpeg' && context.hasAlpha && context.backgroundColor && (
+        <p>JPG uses the color set in Remove background.</p>
+      )}
+      {value.format === 'jpeg' && context.hasAlpha && !context.backgroundColor && (
         <fieldset className="background-options">
           <legend>JPG background</legend>
           <p>Transparent areas will use this color.</p>

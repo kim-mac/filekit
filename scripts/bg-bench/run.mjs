@@ -7,6 +7,7 @@ import { chromium } from '@playwright/test';
 import sharp from 'sharp';
 import fixtures from '../../test/fixtures/bg/fixtures.json' with { type: 'json' };
 import models from './models.json' with { type: 'json' };
+import bg0Models from './bg0-models.json' with { type: 'json' };
 import { startServer } from './server.mjs';
 
 const { values } = parseArgs({ options: {
@@ -24,7 +25,8 @@ function select(requested, choices) {
   return [...new Set(ids)];
 }
 
-const modelIds = models.map(model => model.id);
+const candidates = [...models, ...bg0Models];
+const modelIds = candidates.map(model => model.id);
 const selectedModels = select(values.models, modelIds);
 const selectedBackends = select(values.backends, ['wasm', 'webgpu']);
 const selectedFixtures = select(values.fixtures, fixtures.map(fixture => fixture.id));
@@ -218,7 +220,7 @@ const report = {
 };
 try {
   for (const backend of selectedBackends) {
-    for (const model of models.filter(item => selectedModels.includes(item.id))) {
+    for (const model of candidates.filter(item => selectedModels.includes(item.id))) {
       const result = await benchmark(url, model, backend);
       report.results.push(result);
       await writeFile(join(out, 'results.json'), JSON.stringify(report, null, 2) + '\n');

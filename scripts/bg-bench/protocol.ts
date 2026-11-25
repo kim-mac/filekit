@@ -22,5 +22,7 @@ export type BenchWorker = {
     decontaminatedRow: Blob | null;
     refinementMs: { guided: number; decontamination: number } | null;
   }>;
+  compare(image: ArrayBuffer, truth: ArrayBuffer | null, label: string,
+    alpha: ArrayBuffer, width: number, height: number): Promise<Variant>;
   close(): Promise<void>;
 };

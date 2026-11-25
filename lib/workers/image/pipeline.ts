@@ -1,4 +1,6 @@
 import { Zip, ZipPassThrough } from 'fflate';
+import { sameBackground, type BackgroundOptions } from '../../tools/image/background-options';
+import { compositeBackground } from './background';
 import { imageTools } from '../../tools/image';
 import { defaultConvertOptions, defaultOutput, outputName } from '../../tools/image/formats';
 import { fullGeometry, geometrySize, sameGeometry, scaleGeometry, type ImageGeometry } from '../../tools/image/geometry';
@@ -20,7 +22,7 @@ interface PreviewSource {
   readonly base: ImageData;
   readonly hasAlpha: boolean;
   fullFrame?: ImageData;
-  rendered?: { geometry: ImageGeometry; background?: string; blob: Blob; hasAlpha: boolean };
+  rendered?: { geometry: ImageGeometry; background?: string; edit?: BackgroundOptions; blob: Blob; hasAlpha: boolean };
 }
 
 let activePreview: PreviewSource | undefined;
@@ -59,10 +61,14 @@ async function previewSource(request: PreviewRequest, report: ReportStage): Prom
   return source;
 }
 
+export function releaseFullPreview() {
+  if (activePreview) activePreview.fullFrame = undefined;
+}
+
 function decodeForPreview(original: File, report: ReportStage) {
   // Intake can validate another file while the selection remains unchanged.
   // Keep the selected preview base and make room for the temporary decode.
-  if (activePreview) activePreview.fullFrame = undefined;
+  releaseFullPreview();
   return decodeOriginal(original, report);
 }
 
@@ -87,34 +93,57 @@ export async function renderPreview(request: PreviewRequest, progress: ProgressC
   const source = await previewSource(request, report);
   const { base, format } = source;
   report('Rendering preview');
-  const { geometry, output } = await imageTools.replay({
+  const { geometry, output: conversion, backgroundEdit } = await imageTools.replay({
     geometry: fullGeometry(source), output: defaultOutput(format),
   }, request.commands);
+  const output = backgroundEdit ? { ...conversion, background: backgroundEdit.color } : conversion;
+  const maxEdge = backgroundEdit?.mask?.outputMaxEdge;
+  const previewBase = maxEdge ? resizePreview(base, maxEdge) : base;
+  const dimensions = maxEdge ? cappedSize(source, maxEdge) : source;
+  const outputGeometry = maxEdge ? scaleGeometry(geometry, source, dimensions) : geometry;
   let rendered = source.rendered;
   const expectedBackground = rendered?.hasAlpha && output.format === 'jpeg' ? output.background : undefined;
-  if (!rendered || !sameGeometry(rendered.geometry, geometry) || rendered.background !== expectedBackground) {
-    let preview = renderGeometry(base, scaleGeometry(geometry, source, base));
-    const hasAlpha = source.hasAlpha && hasTransparency(preview);
+  if (!rendered || !sameGeometry(rendered.geometry, geometry) || rendered.background !== expectedBackground ||
+    !sameBackground(rendered.edit, backgroundEdit)) {
+    const composed = backgroundEdit
+      ? await compositeBackground(new ImageData(previewBase.data.slice(), previewBase.width, previewBase.height), backgroundEdit)
+      : previewBase;
+    let preview = renderGeometry(composed, scaleGeometry(geometry, source, previewBase));
+    const hasAlpha = Boolean(source.hasAlpha || backgroundEdit) && hasTransparency(preview);
     const background = hasAlpha && output.format === 'jpeg' ? output.background : undefined;
     if (background) {
       if (preview === base) preview = new ImageData(base.data.slice(), base.width, base.height);
       flatten(preview, background);
     }
-    rendered = { geometry, background, hasAlpha, blob: await encodePreview(preview, hasAlpha && !background, format) };
+    rendered = { geometry, edit: backgroundEdit, background, hasAlpha, blob: await encodePreview(preview, hasAlpha && !background, format) };
     source.rendered = rendered;
   }
-  return { blob: rendered.blob, info: { ...geometrySize(geometry), hasAlpha: rendered.hasAlpha, format, output } };
+  return { blob: rendered.blob, info: { ...geometrySize(outputGeometry), hasAlpha: rendered.hasAlpha, format, output,
+    backgroundColor: backgroundEdit?.color } };
+}
+
+function cappedSize(frame: { width: number; height: number }, edge: number) {
+  const scale = Math.min(1, edge / Math.max(frame.width, frame.height));
+  return { width: Math.max(1, Math.floor(frame.width * scale)), height: Math.max(1, Math.floor(frame.height * scale)) };
 }
 
 async function prepareExport(request: ImageRequest, report: ReportStage) {
-  if (activePreview) activePreview.fullFrame = undefined;
-  const { frame: original, format, orientation } = await decodeOriginal(request.original, report, false);
-  const { geometry, output } = await imageTools.replay({
-    geometry: fullGeometry(original, orientation), output: defaultOutput(format),
+  releaseFullPreview();
+  // The matte is stored in EXIF-normalized source coordinates. Keep the
+  // existing in-place EXIF/crop path for files without a background edit.
+  const hasBackground = request.commands.some(command => command.toolId === 'remove-background');
+  const { frame: original, format, orientation } = await decodeOriginal(request.original, report, hasBackground);
+  const { geometry, output, backgroundEdit } = await imageTools.replay({
+    geometry: fullGeometry(original, hasBackground ? 1 : orientation), output: defaultOutput(format),
   }, request.commands);
   // The AVIF wrapper reads the entire backing buffer, so crops need a dense raster.
   const mode = output.format === 'avif' ? 'orient' : 'compact';
-  return { frame: renderGeometry(original, geometry, mode), output };
+  if (!backgroundEdit) return { frame: renderGeometry(original, geometry, mode), output };
+  const maxEdge = backgroundEdit.mask?.outputMaxEdge;
+  const bounded = maxEdge ? resizePreview(original, maxEdge) : original;
+  const mapped = maxEdge ? scaleGeometry(geometry, original, bounded) : geometry;
+  await compositeBackground(bounded, backgroundEdit);
+  return { frame: renderGeometry(bounded, mapped, mode), output: { ...output, background: backgroundEdit.color } };
 }
 
 async function encodeRequest(request: ImageRequest, report: ReportStage): Promise<ImageExport> {

@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { defaultConvertOptions, outputFormats, type OutputFormat } from '../../lib/tools/image/formats';
 import { fullBounds, fullGeometry, type Bounds, type Orientation } from '../../lib/tools/image/geometry';
 import { decodeImage } from '../../lib/workers/image/codecs';
+import { compositeBackground } from '../../lib/workers/image/background';
 import { detectFormat } from '../../lib/workers/image/headers';
 import { exportImage, exportZip, renderPreview } from '../../lib/workers/image/pipeline';
 import { orient, renderGeometry } from '../../lib/workers/image/pixels';
@@ -193,5 +194,54 @@ describe('WASM export goldens', () => {
     expect(detectFormat(new Uint8Array(entries['transparent.png']).buffer)).toBe('png');
     expect(entries['transparent.png']).toEqual(entries['transparent (2).png']);
     expect(stages).toEqual(['first Decoding', 'first Encoding', 'first Packaging', 'bad Decoding', 'second Decoding', 'second Encoding', 'second Packaging']);
+  });
+});
+
+describe('background removal compositing', () => {
+  const matte = (width: number, height: number, alpha: Uint8Array<ArrayBuffer>, outputMaxEdge?: 1280) => ({
+    id: crypto.randomUUID(), width, height, alpha: new Blob([alpha]), tier: 'Lite' as const, provider: 'wasm' as const,
+    outputMaxEdge,
+  });
+
+  it('unmixes a white screen from fine, half-covered hair composited on dark green', async () => {
+    // Opaque white, a 50% dark strand photographed on white, and opaque hair.
+    const prepared = () => new ImageData(Uint8ClampedArray.of(
+      255, 255, 255, 255, 137, 142, 147, 255, 20, 30, 40, 255,
+    ), 3, 1);
+    const options = { color: '#104e32', mask: matte(3, 1, Uint8Array.of(0, 128, 255)) };
+    const cutout = await compositeBackground(prepared(), { ...options, mode: 'transparent' });
+    near(rgba(cutout, 1, 0), [20, 30, 40, 128], 2);
+    const green = await compositeBackground(prepared(), { ...options, mode: 'solid' });
+    expect(rgba(green, 0, 0)).toEqual([16, 78, 50, 255]);
+    near(rgba(green, 1, 0), [18, 54, 45, 255], 2);
+    expect(rgba(green, 2, 0)).toEqual([20, 30, 40, 255]);
+  });
+
+  it('blurs the original background and preserves opaque foreground pixels', async () => {
+    const frame = new ImageData(Uint8ClampedArray.of(
+      240, 20, 40, 255, 16, 40, 100, 255, 240, 20, 40, 255,
+    ), 3, 1);
+    const result = await compositeBackground(frame, {
+      mode: 'blur', color: '#ffffff', mask: matte(3, 1, Uint8Array.of(0, 255, 0)),
+    });
+    expect(rgba(result, 1, 0)).toEqual([16, 40, 100, 255]);
+    expect(rgba(result, 0, 0)[0]).toBeLessThan(240);
+    expect(rgba(result, 0, 0)[3]).toBe(255);
+  });
+
+  it.each(['png', 'webp', 'avif', 'jpeg'] as const)('replays EXIF, background and crop in either order for %s', async (format) => {
+    const original = await fixture('oriented.jpg');
+    const remove = { toolId: 'remove-background', options: {
+      mode: 'transparent', color: '#104e32', mask: matte(2, 3, Uint8Array.of(0, 255, 0, 255, 0, 255)),
+    } };
+    const rotate = crop(6, { left: 0.125, top: 0, right: 0.875, bottom: 1 });
+    const first = await exportImage({ id: 'bg', original, commands: [remove, rotate, convert(format, 98)] }, silent);
+    const later = await exportImage({ id: 'bg', original, commands: [convert(format, 98), rotate, remove] }, silent);
+    const firstPixels = (await decodeImage(first.blob)).frame;
+    const secondPixels = (await decodeImage(later.blob)).frame;
+    expect([firstPixels.width, firstPixels.height]).toEqual([72, 64]);
+    expect([...firstPixels.data]).toEqual([...secondPixels.data]);
+    if (format === 'jpeg') near(rgba(firstPixels, 50, 1), [16, 78, 50, 255], 17);
+    else expect(rgba(firstPixels, 50, 1)[3]).toBe(0);
   });
 });

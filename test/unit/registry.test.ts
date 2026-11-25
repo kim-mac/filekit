@@ -53,7 +53,7 @@ describe('Category registry', () => {
 
 describe('Convert plugin', () => {
   it('changes only the export settings', async () => {
-    expect(imageTools.list().map(({ id }) => id)).toEqual(['convert', 'crop']);
+    expect(imageTools.list().map(({ id }) => id)).toEqual(['convert', 'crop', 'remove-background']);
     const geometry = fullGeometry({ width: 2, height: 3 });
     const input = { geometry, output: defaultOutput('heic') };
     const options = { format: 'jpeg', quality: 52, background: '#000000' };

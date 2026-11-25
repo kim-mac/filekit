@@ -1,18 +1,35 @@
-import { releaseProxy, transfer, wrap } from 'comlink';
+import { proxy, releaseProxy, transfer, wrap } from 'comlink';
 import models from './models.json';
+import bg0Models from './bg0-models.json';
+import type { BackgroundWorkerApi, RemovalRequest } from '../../lib/workers/bg0/protocol';
 import fixtures from '../../test/fixtures/bg/fixtures.json';
 import type { Backend, BenchWorker, Fixture } from './protocol';
 
 let worker: Worker | undefined;
+let bgWorker: Worker | undefined;
+let bg: { remote: ReturnType<typeof wrap<BackgroundWorkerApi>>; options: Omit<RemovalRequest, 'original'>;
+  requested: Backend; tier: string } | undefined;
 let remote: ReturnType<typeof wrap<BenchWorker>> | undefined;
 
 async function load(id: string, backend: Backend, requireHardware = false) {
   const model = models.find(item => item.id === id);
-  if (!model) throw new Error(`Unknown model ${id}`);
+  const bgModel = bg0Models.find(item => item.id === id);
+  if (!model && !bgModel) throw new Error(`Unknown model ${id}`);
   await close();
   worker = new Worker('/dev/bg-bench/bundle/worker.js', { type: 'module' });
   remote = wrap<BenchWorker>(worker);
-  return remote.load(model, backend, requireHardware);
+  if (model) return remote.load(model, backend, requireHardware);
+  if (!bgModel) throw new Error('Model missing.');
+  const start = performance.now();
+  bgWorker = new Worker('/workers/background.worker.js', { type: 'module' });
+  const bgRemote = wrap<BackgroundWorkerApi>(bgWorker);
+  const options = { model: bgModel.tier as 'full' | 'lite', forceWasm: backend === 'wasm',
+    touchPoints: 0, mobile: false, bench: true };
+  bg = { remote: bgRemote, options, requested: backend, tier: bgModel.tier };
+  const provider = await bgRemote.prepare(options);
+  if (provider !== backend) throw new Error(`bg0 selected ${provider} instead of ${backend}`);
+  const loadMs = performance.now() - start;
+  return { loadMs, weightsMs: null, sessionMs: null, adapter: null };
 }
 
 async function readFixture(path: string) {
@@ -27,6 +44,26 @@ async function predict(fixture: Fixture, repeats: number, refine: boolean) {
   if (index === -1) throw new Error('Unknown fixture');
   const image = await readFixture(`${index}/image`);
   const truth = fixture.mask ? await readFixture(`${index}/alpha`) : null;
+  if (bg) {
+    const timingsMs: number[] = [];
+    const original = new Blob([image]);
+    const notify = proxy(() => undefined);
+    // Comlink releases each callback on the background worker after it finishes.
+    let mask;
+    for (let run = 0; run < repeats; run++) {
+      const start = performance.now();
+      mask = await bg.remote.makeMask({ ...bg.options, original }, run === 0 ? notify : proxy(() => undefined));
+      timingsMs.push(performance.now() - start);
+      if (mask.provider !== bg.requested || mask.tier.toLowerCase() !== bg.tier) {
+        throw new Error(`bg0 fell back to ${mask.tier} / ${mask.provider}`);
+      }
+    }
+    if (!mask) throw new Error('bg0 returned no mask');
+    const alpha = await mask.alpha.arrayBuffer();
+    const baseline = await remote.compare(transfer(image, [image]), truth && transfer(truth, [truth]),
+      fixture.id, transfer(alpha, [alpha]), mask.width, mask.height);
+    return { timingsMs, baseline, guided: null, decontaminatedRow: null, refinementMs: null };
+  }
   return remote.predict(
     transfer(image, [image]), truth && transfer(truth, [truth]), fixture.id, repeats, refine && !!fixture.refine,
   );
@@ -38,6 +75,9 @@ async function close() {
   } finally {
     remote?.[releaseProxy]();
     worker?.terminate();
+    bg?.remote[releaseProxy]();
+    bgWorker?.terminate();
+    bg = bgWorker = undefined;
     remote = undefined;
     worker = undefined;
   }
@@ -56,6 +96,7 @@ for (const model of models) {
   const name = model.shipEligible ? model.name : `${model.name} (reference only)`;
   selector.add(new Option(name, model.id));
 }
+for (const model of bg0Models) selector.add(new Option(model.name, model.id));
 form.addEventListener('submit', async event => {
   event.preventDefault();
   button.disabled = true;

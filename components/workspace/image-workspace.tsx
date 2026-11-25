@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, ImagePlus, Plus, Redo2, Undo2, X } from 'lucide-react';
 import type { EditCommand } from '../../lib/core/contracts';
 import { activeCommands, createEditStack, recordEdit, redo, undo, type EditStack } from '../../lib/core/edit-stack';
@@ -190,7 +190,7 @@ export function ImageWorkspace() {
     setNotice('');
   }, [updateEntry]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const paste = (event: ClipboardEvent) => {
       const clipboard = event.clipboardData;
       if (!clipboard) return;
@@ -393,9 +393,16 @@ export function ImageWorkspace() {
             {selected && selectedInfo && (
               <ToolPanel revision={selected.stack}
                 registry={imageTools} context={{
+                  original: selected.stack.original, releaseImageMemory: () => client.releaseFullPreview(),
+                  backgroundColor: selectedInfo.backgroundColor,
                   hasAlpha: selectedInfo.hasAlpha, size: selectedInfo, previewUrl, previewTarget, disabled: toolsDisabled,
                 }}
-                initialOptions={{ convert: selectedInfo.output }}
+                initialOptions={{
+                  ...Object.fromEntries(activeCommands(selected.stack)
+                    .filter(command => imageTools.get(command.toolId).rememberOptions)
+                    .map(command => [command.toolId, command.options])),
+                  convert: selectedInfo.output,
+                }}
                 disabled={toolsDisabled}
                 onApply={(command: EditCommand) => edit(selected, recordEdit(selected.stack, command))} />
             )}
@@ -408,7 +415,7 @@ export function ImageWorkspace() {
               {selectedInfo && <p className="output-summary">
                 {outputFormats[selectedInfo.output.format].label}
                 {outputFormats[selectedInfo.output.format].lossy && ` · Quality ${selectedInfo.output.quality}%`}
-                {selectedInfo.hasAlpha && selectedInfo.output.format === 'jpeg' && ` · ${selectedInfo.output.background === '#ffffff' ? 'White' : 'Black'} background`}
+                {selectedInfo.hasAlpha && selectedInfo.output.format === 'jpeg' && ` · ${selectedInfo.backgroundColor ?? (selectedInfo.output.background === '#ffffff' ? 'White' : 'Black')} background`}
               </p>}
               <p className="section-note">Exports use the original pixels and strip EXIF metadata.</p>
               <div className="export-buttons">

@@ -38,6 +38,7 @@ export default function HomePage() {
             );
           })}
         </section>
+        <footer className="home-footer"><Link href="/about/licenses">Licenses</Link></footer>
       </main>
     </>
   );
