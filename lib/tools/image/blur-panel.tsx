@@ -225,14 +225,15 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
         </button>
         {selectedShape && (
           <button className="button secondary" aria-keyshortcuts="Delete" type="button" onClick={deleteShape}>
-            <Trash2 size={17} aria-hidden />Delete selected shape
+            <Trash2 size={17} aria-hidden />Delete shape
           </button>
         )}
       </div>
       {faceStatus && <p className="section-note" role="status">{faceStatus}</p>}
       {hasDraft && draftError && <p className="section-note" role="status">The draft preview could not render. Apply blur to retry.</p>}
-      <p className="section-note" id="blur-instructions">
-        Drag on the image to {mode === 'brush' ? 'paint' : mode === 'eraser' ? 'erase blur' : 'draw or adjust a shape'}. Use two fingers to pan and zoom on touch screens.
+      <p className="section-note blur-instructions" id="blur-instructions">
+        <span>Drag to {mode === 'brush' ? 'paint' : mode === 'eraser' ? 'erase blur' : 'draw or adjust a shape'}.</span>
+        <span>Use two fingers to pan and zoom.</span>
       </p>
     </div>
   );

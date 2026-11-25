@@ -98,7 +98,7 @@ test('draws, erases, moves, resizes, deletes, and replays blur regions', async (
   await draw([0.38, 0.54], [0.45, 0.6]);
   const rectMoved = (await rectangle.boundingBox())!;
   expect(rectMoved.x).toBeGreaterThan(rectBefore.x + 5);
-  await expect(button('Delete selected shape')).toBeVisible();
+  await expect(button('Delete shape')).toBeVisible();
 
   const resize = button('Resize shape from bottom right');
   await resize.scrollIntoViewIfNeeded();
@@ -113,7 +113,7 @@ test('draws, erases, moves, resizes, deletes, and replays blur regions', async (
   await expect(ellipse).toBeVisible();
   if (isMobile) {
     await ellipse.tap();
-    await action(button('Delete selected shape'));
+    await action(button('Delete shape'));
   } else {
     await ellipse.press('Delete');
   }
@@ -167,7 +167,7 @@ test('adds adjustable regions with the local face detector', async ({ page, isMo
     await expect(preview).toHaveScreenshot('blur.png', { animations: 'disabled', maxDiffPixelRatio: 0.04 });
     await expect(controls).toHaveScreenshot('blur-controls.png', { animations: 'disabled', maxDiffPixelRatio: 0.04 });
   }
-  await action(button('Delete selected shape'));
+  await action(button('Delete shape'));
   await expect(face).toHaveCount(0);
   await action(button('Detect faces'));
   await expect(face).toBeVisible();
