@@ -9,7 +9,7 @@ export default function HomePage() {
     <>
       <header className="site-header">
         <div className="site-bar">
-          <Link href="/" className="wordmark" aria-label="FileKit home">File<span>Kit</span></Link>
+          <Link href="/" prefetch={false} className="wordmark" aria-label="FileKit home">File<span>Kit</span></Link>
           <span className="privacy"><ShieldCheck size={17} aria-hidden /> Private by design</span>
         </div>
       </header>
@@ -32,12 +32,13 @@ export default function HomePage() {
               </>
             );
             return href ? (
-              <Link key={id} href={href} className="category-card category-active">{content}</Link>
+              <Link key={id} href={href} prefetch={false} className="category-card category-active">{content}</Link>
             ) : (
               <article key={id} className="category-card">{content}</article>
             );
           })}
         </section>
+        <footer className="home-footer"><Link href="/about/licenses" prefetch={false}>Licenses</Link></footer>
       </main>
     </>
   );

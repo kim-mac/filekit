@@ -1,12 +1,16 @@
 # Background removal model evaluation
 
-## Recommendation
+## Final decision
 
-Use the pinned **U²-Net-p FP32** checkpoint with **ONNX Runtime Web in a dedicated Comlink worker**. Use hardware WebGPU after an adapter and session can run the model successfully, with single-threaded WASM as the fallback. Keep WASM active for initial integration until device testing validates WebGPU. Phones and laptops use the same bytes, 320 × 320 input, normalization, and alpha reconstruction. Release the failed GPU session by terminating its worker before starting the WASM worker. Cache the model on first use so a backend switch does not download it again.
+Ship **bg0 BiRefNet**. Use the browser-compatible 512 px Full Swin-L export on capable desktop hardware WebGPU and the 512 px Lite path on weaker devices or after an acceleration failure. Use bg0's quantized Lite path on iOS. Show Full or Lite during processing and after completion.
 
-U²-Net-p is an Apache-2.0 general-purpose checkpoint that fits in one small Pages asset. Its soft masks work well for centered subjects and simple products. The comparison sheets show important limits on clutter, low-contrast subject boundaries, fine strands, and transparency. Keep alpha refinement disabled by default based on the edge trial below.
+The FileKit maintainer's laptop comparison found visibly better cutouts with bg0, especially compared with U²-Net-p. bg0 also brings hardware selection, model recovery, quality refinement, and a tested upstream iOS memory path. The earlier WASM failure below used a different, unoptimized 1,024 px BiRefNet General Lite graph. The new decision prioritizes desktop quality and a reliable Lite fallback. U²-Net-p remains available on the opt-in benchmark page as a reference.
 
-This is a development spike. The benchmark runs from a local server at `/dev/bg-bench`. The Next.js static export omits the route, benchmark dependencies, fixtures, and weights.
+FileKit now self-hosts verified model chunks and replays the matte on original pixels. [Integration, download sizes, and laptop testing](bg0-integration.md).
+
+## Historical spike
+
+The following measurements were collected for PR #4. At that time the spike favored U²-Net-p for its small download and working WASM path. The rows capture those historical results.
 
 ## Checkpoints
 
@@ -82,7 +86,7 @@ The trial used seven hair/fur fixtures for each model. U²-Net-p and MODNet were
 
 Guided alpha softened the contour on real portraits and brushed down thin strands on the toy. The small U²-Net-p IoU gain came with an 8-point boundary F drop. It also left larger segmentation mistakes visible, such as the translucent flank on the tabby. Color decontamination subtly reduced fringe tint on parts of the windswept portrait, while the green background retained above the dark-haired portrait remained visible. The color pass adjusts RGB with the same alpha. Its quality assessment is visual. These results favor the original model alpha for the initial implementation.
 
-## Same-origin delivery on Cloudflare Pages
+## Historical hosting comparison
 
 Use immutable versioned URLs with a content digest. Stage the selected worker, ORT assets, weight manifest, and weights during release packaging. The dedicated worker verifies byte lengths and hashes before using local bytes. Read from Cache Storage after the first successful download. Use versioned cache keys and validate cache hits. If quota or private browsing prevents storing weights, use the validated bytes for the current session and let the next session retry. Warm the worker before handing over image pixels. All runtime asset requests are same-origin GETs, and image names, image bytes, and outputs stay on the device. [Cloudflare Pages 25 MiB asset limit](https://developers.cloudflare.com/pages/platform/limits/#file-size).
 
@@ -94,19 +98,20 @@ Use immutable versioned URLs with a content digest. Stage the selected worker, O
 
 Package the exact WebGPU and WASM artifacts for the installed ORT version. The benchmark uses ORT's WebGPU Asyncify binary (23,427,852 bytes) and standard WASM binary (12,810,620 bytes). Each fits below the Pages limit. Cache executable assets and weights separately so version changes are explicit. Publish the upstream license and attribution alongside the selected checkpoint. The Android and iOS acceptance run should include cold and warm loads, simulated WebGPU initialization loss, and alpha comparison between providers with the same model digest.
 
-## Reproduce
+## Reproduce the historical comparison
 
 ```sh
 npm ci
 npx playwright install chromium
 npm run bg:prepare
-npm run bg:dev
+npm run build:worker
+FILEKIT_BENCH=1 npm run bg:dev
 ```
 
 Open `http://127.0.0.1:4310/dev/bg-bench`. Select WebGPU, WASM, or Auto to browse fixture outputs. In a separate terminal run the Playwright matrix.
 
 ```sh
-npm run bg:bench -- --refine u2netp,modnet
+FILEKIT_BENCH=1 npm run bg:bench -- --models u2netp,modnet,isnet,birefnet-lite,bria-rmbg --refine u2netp,modnet
 ```
 
 The runner starts its own loopback server, so the interactive server is optional. It writes JSON, full fixture-sized mask PNGs, per-image rows, and comparison/refinement sheets under `.cache/bg-bench/results/`. `--models`, `--backends`, and `--fixtures` accept comma-separated IDs. Use `--repeats 1` for a shorter run, `--software-webgpu` to force SwiftShader for diagnostics, and `BG_CHROMIUM=/path/to/chromium` to select a local browser. A nonzero exit marks a failed model or fixture, and successful artifacts and error details remain available.

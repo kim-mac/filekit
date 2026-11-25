@@ -1,0 +1,20 @@
+diff --git a/node_modules/@huggingface/transformers/dist/transformers.web.js b/node_modules/@huggingface/transformers/dist/transformers.web.js
+--- a/node_modules/@huggingface/transformers/dist/transformers.web.js
++++ b/node_modules/@huggingface/transformers/dist/transformers.web.js
+@@ -8704,14 +8704,14 @@
+     logSeverityLevel,
+     ...session_options
+   });
+-  const session = await (apis.IS_WEB_ENV ? webInitChain = webInitChain.then(load) : load());
++  const session = await (apis.IS_WEB_ENV ? webInitChain = webInitChain.then(load, load) : load());
+   session.config = session_config;
+   return session;
+ }
+ var webInferenceChain = Promise.resolve();
+ async function runInferenceSession(session, ortFeed) {
+   const run = () => session.run(ortFeed);
+-  return apis.IS_WEB_ENV ? webInferenceChain = webInferenceChain.then(run) : run();
++  return apis.IS_WEB_ENV ? webInferenceChain = webInferenceChain.then(run, run) : run();
+ }
+ function isONNXTensor(x) {
+   return x instanceof ONNX.Tensor;

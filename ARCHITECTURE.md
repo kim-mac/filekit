@@ -1,6 +1,6 @@
 # FileKit architecture
 
-FileKit is a privacy-first browser application for image, PDF, audio, and video tools. Phase 1 ships the image workspace. Phase 1a covers intake, conversion, and export. Phase 1b adds cached previews, crop, rotation, and flips.
+FileKit is a privacy-first browser application for image, PDF, audio, and video tools. Phase 1 ships the image workspace. Phase 1a covers intake, conversion, and export. Phase 1b adds cached previews, crop, rotation, and flips. Phase 1c adds background removal.
 
 ## Folder structure
 
@@ -19,10 +19,12 @@ lib/
       index.ts               Image tool registration
       crop.tsx               Crop, rotate, and flip plugin
       convert.tsx            Output format and quality plugin
+      remove-background.tsx  AI matte and background settings
   workers/
     image.worker.ts          Worker entry point and Comlink exposure
     image-client.ts          Typed Comlink proxy and worker lifecycle
     image/                   WASM decoding, pixel rendering, encoding, and ZIP
+    bg0/                     Dedicated Comlink matte worker and verified asset transport
 scripts/build-worker.mjs     Static module worker and lazy codec bundles
 test/
   unit/                      Edit stack, registry, and tool apply tests
@@ -33,7 +35,9 @@ test/
 .github/workflows/test.yml    Test suite on every push and pull request
 ```
 
-Use the Next.js App Router and TypeScript with `output: 'export'`. Cloudflare Pages builds with `npm run build` and serves `out/`. Routes generate static HTML. The interactive workspace runs in a Client Component. Use Tailwind CSS for layouts optimized equally for phones and laptops, large touch targets, and dark mode. Give every device the same tools, options, and output quality. Give phones touch-friendly controls, gestures, and save-to-device downloads. Use the extra space on laptops for larger previews and side panels, and support drag-and-drop and keyboard shortcuts. Address tight phone memory with WASM paths, tiling, or sequential processing while preserving output quality.
+Use the Next.js App Router and TypeScript with `output: 'export'`. Cloudflare Pages builds with `npm run build` and serves `out/`. Routes generate static HTML. The interactive workspace runs in a Client Component. Prioritize desktop and laptop with larger previews, side panels, keyboard shortcuts, and the highest-quality models that the device can run. Mobile is supported with touch-friendly controls, accessible progress and errors, light and dark modes, and save-to-device downloads. Mobile may use lighter models, smaller inference inputs, or simpler controls. Show the active model quality and fall back on devices with limited memory or unavailable hardware acceleration.
+
+For background removal, capable desktop hardware uses full BiRefNet through bg0 on WebGPU. Constrained devices and browsers without usable WebGPU use lite, with WASM fallback. The same-origin runtime caches verified model assets. Keep the non-destructive edit history and materialize output from the original decoded raster.
 
 ## Phase 1 workspace
 
@@ -46,7 +50,7 @@ Use the Next.js App Router and TypeScript with `output: 'export'`. Cloudflare Pa
 
 ## Tool contract and registry
 
-Each plugin supplies its UI, option defaults and validation, and implementation. The options panel edits draft options. Confirming a tool records a validated command in the file's history. The worker runs `apply` when it replays that history.
+Each plugin supplies its UI, option defaults and validation, and implementation. The options panel edits draft options. Confirming a tool records a validated command in the file's history. A tool may prepare its options asynchronously with progress and cancellation before committing the command. The worker runs `apply` when it replays that history.
 
 ```ts
 type Category = 'image' | 'pdf' | 'audio' | 'video';
@@ -72,9 +76,9 @@ interface EditCommand {
 }
 ```
 
-The category registry lists tools in toolbar order, looks them up by stable ID, and rejects duplicate IDs or a category mismatch. The image registry registers Convert and Crop. Add a tool by creating its plugin module and registering it. Open the options panel using the registry entry and resolve commands through the same registry in the worker. Keep plugin modules safe to import in the worker and load dependencies that need the DOM inside the UI path. Pass commands as plain structured-cloneable data.
+The category registry lists tools in toolbar order, looks them up by stable ID, and rejects duplicate IDs or a category mismatch. The image registry registers Convert, Crop, and Remove background. Add a tool by creating its plugin module and registering it. Open the options panel using the registry entry and resolve commands through the same registry in the worker. Keep plugin modules safe to import in the worker and load dependencies that need the DOM inside the UI path. Pass commands as plain structured-cloneable data.
 
-Image plugins replay geometry and export settings. Crop composes source bounds and orientation. Convert updates the output format and quality. The pipeline materializes the final geometry from one raster after replay. The final export encodes once after replaying all edits, so undo, redo, and repeated export avoid cumulative quality loss.
+Image plugins replay geometry and export settings. Crop composes source bounds and orientation. Convert updates the output format and quality. Remove background stores a compact matte and the background appearance. The matte maps to the EXIF-normalized original, so format, crop, and background can replay in either order. The pipeline materializes the final geometry from one raster after replay. The final export encodes once after replaying all edits, so undo, redo, and repeated export avoid cumulative quality loss.
 
 ## Edit history and rendering
 
@@ -118,17 +122,25 @@ A new full-size transposed raster would use 91.55 MiB. Export composes EXIF with
 
 Raster subtotals count live buffers owned by FileKit. The browser, compressed blobs, GPU surfaces, and WASM linear memory add to process memory. The Chromium performance test also logs the Linux renderer high-water RSS before intake and after plain and rotated exports. RSS includes earlier work and the browser runtime. Mobile profiles run on the desktop test host.
 
-Bundle scripts, fonts if needed, worker modules, and WASM as same-origin static assets. Load each WASM codec on first use from same-origin static assets. Allow same-origin GET requests for bundled JS and WASM. Reject any request to an external domain, any request with a body, and any request whose URL contains file names or file data. Keep all file data, names, metadata, previews, and results in the browser. Generate downloads from local blobs. The app has zero uploads, API routes, accounts, or tracking.
+Bundle scripts, fonts if needed, worker modules, and WASM as same-origin static assets. Load each WASM codec on first use from same-origin static assets. Allow same-origin GET requests for bundled JS, WASM, and verified static model assets. Reject any request to an external domain, any request with a body, and any request whose URL contains file names or file data. Keep all file data, names, metadata, previews, and results in the browser. Generate downloads from local blobs. The app has zero uploads, API routes, accounts, or tracking.
+
+## Background removal
+
+A disposable Comlink worker invokes the pinned bg0 library. FileKit decodes the original with its existing codecs, makes a bounded PNG for inference, and releases the original raster ahead of the bg0 session. Capable desktops choose Full on hardware WebGPU. Lite is available on WebGPU or WASM, and iOS uses bg0's dedicated quantized Lite worker. Failed Full runs fall back to Lite during inference. A tab marker enables Lite after an interrupted Full run. Canceling tears down the dedicated worker and preserves the current edit history.
+
+The desktop PNG sent to bg0 is capped at 1,600 px on the long edge and uses bg0's quality refinement. Android and iOS use smaller inference inputs and fast refinement. The stored alpha is a bounded grayscale Blob. Preview and export guide its upscale with the source RGB and unmix nearby background colors at partially transparent edges. Transparent, solid, and blurred backgrounds reuse the same matte. Desktop and Android encode the original edited pixel dimensions. iOS bounds the EXIF-normalized source to a 1,280 px long edge before replaying crop and rotation, so its output can be smaller. The control panel displays the active tier and the iOS cap.
+
+The Cloudflare build downloads pinned weights as build inputs and publishes only same-origin assets. It splits large model and runtime assets into files below 24 MiB. The browser checks each chunk against SHA-256 before caching or use. The separately launched benchmark requires `FILEKIT_BENCH=1` and stays outside the Next export. [Integration, data sizes, and laptop testing](docs/bg0-integration.md).
 
 ## Testing plan
 
-Run `npm ci`, `npx playwright install --with-deps chromium firefox webkit`, and `npm run test:all`. The last command runs Vitest, builds the static export, then serves `out/` locally for Playwright. CI runs the same command on every push and pull request.
+Run `npm ci`, `npx playwright install --with-deps chromium firefox webkit`, and `npm run test:all`. The last command runs Vitest, builds the static export, then serves `out/` locally for Playwright. CI stages the pinned model assets through a keyed dependency cache, sets `FILEKIT_BG_E2E=1`, and runs the same command on every push and pull request.
 
 | Suite | Phase 1 coverage |
 | --- | --- |
 | Vitest unit | Edit stack boundaries, redo branch truncation, per-file isolation, registry lookup and validation, and each plugin's `apply()`, including error cases. |
 | Golden files | Use reference JPG, PNG, WebP, HEIC, AVIF, and animated GIF inputs plus a 6000 × 4000 image and a transparent PNG in `test/fixtures`. Verify output signatures and MIME types, decodability, dimensions, alpha handling, GIF first frame, EXIF orientation and stripping, and exported ZIP contents. Compare decoded pixels with a tolerance for lossy formats. Load codec WASM from disk in Vitest and exercise browser-specific decode and worker paths in Playwright with the same fixtures. |
 | Playwright | Chromium, Firefox, and WebKit on desktop, with iPhone WebKit and Android Chromium touch emulation. Exercise picker, drop, paste, multiple files, conversion, crop presets, pointer resizing, rotation, flips, progress, errors, and single and ZIP download. Cover keyboard editing and history on desktop and touch controls on mobile. |
-| Privacy | Start network observation before page initialization. Block service workers. Fail on any request to an external domain, any request with a body, or any request whose URL contains fixture filenames or file data. Allow same-origin GET requests for bundled JS and WASM. Check downloaded files still succeed. |
+| Privacy | Start network observation before page initialization. Block service workers. Fail on any request to an external domain, any request with a body, or any request whose URL contains fixture filenames or file data. Allow same-origin GET requests for bundled JS, WASM, and verified static model assets. Check downloaded files still succeed. |
 | Screenshots | Capture each screen and its key states at mobile and desktop sizes in `test/screenshots`, using stable fixtures and Playwright screenshot assertions. |
 | Performance | Run a 6000 × 4000 image through preview and export on desktop and mobile emulation. Assert a responsive workspace, job completion, and full output dimensions after a format-only edit. Log the first preview, repeated conversion previews, rotated preview, and export timing per project. Enforce the 300 ms repeat-preview target on desktop Chromium and log its export memory high-water marks. |

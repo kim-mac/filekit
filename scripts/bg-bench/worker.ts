@@ -199,9 +199,36 @@ async function predict(buffer: ArrayBuffer, truthBuffer: ArrayBuffer | null, lab
     refinementMs: { guided: guidedEnd - start, decontamination: end - guidedEnd } };
 }
 
+async function compare(
+  image: ArrayBuffer, truthBuffer: ArrayBuffer | null, label: string,
+  alpha: ArrayBuffer, width: number, height: number,
+) {
+  const bitmap = await imageBitmap(image);
+  const original = canvas(bitmap.width, bitmap.height);
+  original.ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const pixels = original.ctx.getImageData(0, 0, original.image.width, original.image.height);
+  const source = canvas(width, height);
+  source.ctx.putImageData(maskImage(new Uint8Array(alpha), width, height), 0, 0);
+  original.ctx.drawImage(source.image, 0, 0, pixels.width, pixels.height);
+  const resized = gray(original.ctx.getImageData(0, 0, pixels.width, pixels.height));
+  let truth = null;
+  if (truthBuffer) {
+    const reference = await imageBitmap(truthBuffer);
+    try {
+      original.ctx.drawImage(reference, 0, 0);
+      truth = gray(original.ctx.getImageData(0, 0, pixels.width, pixels.height));
+    } finally {
+      reference.close();
+    }
+  }
+  return makeVariant(pixels, resized, truth, label);
+}
+
 expose({
   load,
   predict,
+  compare,
   async close() {
     await active?.session.release();
     active = undefined;

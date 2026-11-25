@@ -6,7 +6,10 @@ const outdir = 'public/workers';
 await rm(outdir, { recursive: true, force: true });
 
 await build({
-  entryPoints: { 'image.worker': 'lib/workers/image.worker.ts' },
+  entryPoints: {
+    'image.worker': 'lib/workers/image.worker.ts',
+    'background.worker': 'lib/workers/bg0/background.worker.ts',
+  },
   outdir,
   bundle: true,
   splitting: true,

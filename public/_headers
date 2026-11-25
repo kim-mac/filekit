@@ -1,0 +1,6 @@
+/bg-models/chunks/*
+  Cache-Control: public, max-age=31536000, immutable
+/workers/background.worker.js
+  Content-Security-Policy: default-src 'self'; connect-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:
+/bg-runtime/ios/worker.mjs
+  Content-Security-Policy: default-src 'self'; connect-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:

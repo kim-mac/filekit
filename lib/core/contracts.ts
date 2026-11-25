@@ -18,6 +18,13 @@ export interface ToolDefinition<Input, Options, Output, Context = undefined> {
     onChange: (options: Options) => void;
   }>;
   readonly defaultOptions: Options;
+  readonly rememberOptions?: boolean;
+  prepareOptions?(options: Options, context: Context, signal: AbortSignal, onProgress: (update: ToolProgress) => void): Promise<Options>;
   parseOptions(value: unknown): Options;
   apply(input: Input, options: Options): Promise<Output>;
+}
+
+export interface ToolProgress {
+  readonly message: string;
+  readonly progress: number;
 }

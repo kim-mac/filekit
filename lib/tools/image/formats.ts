@@ -1,3 +1,4 @@
+import type { BackgroundOptions } from './background-options';
 import type { ImageGeometry } from './geometry';
 
 export const outputFormats = {
@@ -18,6 +19,7 @@ export interface ConvertOptions {
 
 export interface ImageState {
   readonly geometry: ImageGeometry;
+  readonly backgroundEdit?: BackgroundOptions;
   readonly output: ConvertOptions;
 }
 

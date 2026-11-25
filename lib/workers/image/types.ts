@@ -17,6 +17,7 @@ export interface ImageInfo {
   readonly width: number;
   readonly height: number;
   readonly hasAlpha: boolean;
+  readonly backgroundColor?: string;
   readonly output: ConvertOptions;
 }
 
@@ -54,6 +55,7 @@ export type ProgressCallback = (progress: ImageProgress) => void;
 
 export interface ImageWorkerApi {
   retainPreview(id: string): void;
+  releaseFullPreview(): void;
   renderPreview(request: PreviewRequest, onProgress: ProgressCallback): Promise<PreviewResult>;
   exportImage(request: ImageRequest, onProgress: ProgressCallback): Promise<ImageExport>;
   exportZip(requests: readonly ImageRequest[], onProgress: ProgressCallback): Promise<ZipResult>;

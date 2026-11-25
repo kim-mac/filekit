@@ -63,4 +63,10 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
       });
     }
   }
+  await page.getByRole('button', { name: 'Remove background', exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Transparent', exact: true })).toBeChecked();
+  const removal = page.getByRole('region', { name: 'Tools' });
+  await testInfo.attach('background-controls', { body: await removal.screenshot(), contentType: 'image/png' });
+  if (usesSnapshots) await expect(removal).toHaveScreenshot('background-controls.png', { maxDiffPixelRatio: 0.04 });
+
 });

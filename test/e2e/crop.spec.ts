@@ -81,9 +81,11 @@ test('crops, rotates, flips, and replays edits using each device’s controls', 
   await action(button('Apply crop'));
   await expect(actualSize).toHaveText('80 × 64 px');
   await expect(page.getByText('JPG · Quality 70%')).toBeVisible();
+  await expect(button('Undo')).toBeEnabled();
   if (isMobile) await action(button('Undo'));
   else await page.keyboard.press('ControlOrMeta+z');
   await expect(actualSize).toHaveText('64 × 96 px');
+  await expect(button('Redo')).toBeEnabled();
   if (isMobile) await action(button('Redo'));
   else await page.keyboard.press('ControlOrMeta+Shift+z');
   await expect(actualSize).toHaveText('80 × 64 px');

@@ -10,3 +10,9 @@
 /public/workers/
 
 /.cache/bg-bench/
+
+/.cache/bg0-assets/
+/public/bg-models/
+/public/bg-model-source/
+/public/bg-runtime/
+/public/licenses/

@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { access, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import fixtures from '../../test/fixtures/bg/fixtures.json' with { type: 'json' };
@@ -15,6 +15,11 @@ const types = {
 };
 
 export async function startServer(port = 0) {
+  if (process.env.FILEKIT_BENCH !== '1') throw new Error('Set FILEKIT_BENCH=1 to start the development benchmark.');
+  const publicDir = resolve(here, '../../public');
+  await access(join(publicDir, 'workers/background.worker.js')).catch(() => {
+    throw new Error('Run npm run build:worker before starting the benchmark.');
+  });
   const output = join(here, 'bundle');
   const buildOutput = await build({
     entryPoints: [join(here, 'page.ts'), join(here, 'worker.ts')],
@@ -49,11 +54,14 @@ export async function startServer(port = 0) {
       return;
     }
     const weight = /^\/dev\/bg-bench\/weights\/([a-f0-9]{64})\/(manifest\.json|\d+\.bin)$/.exec(url);
-    const path = files.get(url) ?? (weight && hashes.has(weight[1]) ? join(weightsDir, weight[1], weight[2]) : null);
+    const asset = /^\/(workers|bg-runtime|bg-models|bg-model-source)\/[a-zA-Z0-9_./-]+$/.test(url) &&
+      !url.split('/').some(part => part === '.' || part === '..');
+    const path = files.get(url) ?? (weight && hashes.has(weight[1]) ? join(weightsDir, weight[1], weight[2])
+      : asset ? join(publicDir, url) : null);
     if (path) {
       try {
         const { size } = await stat(path);
-        response.writeHead(200, { 'Content-Type': types[path.split('.').at(-1)], 'Content-Length': size });
+        response.writeHead(200, { 'Content-Type': types[path.split('.').at(-1)] ?? 'application/octet-stream', 'Content-Length': size });
         const stream = createReadStream(path);
         stream.on('error', error => response.destroy(error));
         response.on('close', () => stream.destroy());
@@ -63,7 +71,7 @@ export async function startServer(port = 0) {
         if (error.code !== 'ENOENT') console.error(error);
       }
     }
-    response.writeHead(404).end('Unknown benchmark asset. Run npm run bg:prepare to stage weights.');
+    response.writeHead(404).end('Unknown benchmark asset. Stage weights with npm run bg:assets or npm run bg:prepare.');
   });
   await new Promise((resolve, reject) => server.once('error', reject).listen(port, '127.0.0.1', resolve));
   return { server, url: `http://127.0.0.1:${server.address().port}${root}` };
