@@ -37,6 +37,11 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
   await testInfo.attach('workspace', { body: workspace, contentType: 'image/png' });
 
   if (usesSnapshots) {
-    await expect(page).toHaveScreenshot('workspace.png', { fullPage: true, maxDiffPixelRatio: 0.04 });
+    // Mobile hosts can wrap text below the fold differently. Keep the
+    // full-page capture above and compare a fixed viewport for the baseline.
+    await expect(page).toHaveScreenshot(isMobile ? 'workspace-viewport.png' : 'workspace.png', {
+      fullPage: !isMobile,
+      maxDiffPixelRatio: 0.04,
+    });
   }
 });
