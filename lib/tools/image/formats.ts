@@ -1,3 +1,5 @@
+import type { ImageGeometry } from './geometry';
+
 export const outputFormats = {
   jpeg: { label: 'JPG', mime: 'image/jpeg', extension: 'jpg', lossy: true },
   png: { label: 'PNG', mime: 'image/png', extension: 'png', lossy: false },
@@ -15,7 +17,7 @@ export interface ConvertOptions {
 }
 
 export interface ImageState {
-  readonly frame: ImageData;
+  readonly geometry: ImageGeometry;
   readonly output: ConvertOptions;
 }
 

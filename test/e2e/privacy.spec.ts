@@ -46,6 +46,10 @@ test('lazy codec assets stay same origin and files never enter HTTP requests', a
   await pick(page, ...fixtures);
   await waitForImage(page, 'oriented.jpg');
   await expect(page.getByRole('button', { name: 'Export ZIP' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Crop', exact: true }).click();
+  await page.getByRole('button', { name: 'Flip horizontal' }).click();
+  await page.getByRole('button', { name: 'Apply crop' }).click();
+  await expect(page.getByRole('button', { name: 'Export ZIP' })).toBeEnabled();
   expect((await downloadResult(page, 'Export ZIP')).bytes.length).toBeGreaterThan(0);
   expect([...violations]).toEqual([]);
   expect([...requests]).toEqual(expect.arrayContaining([

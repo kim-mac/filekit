@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import type { EditCommand } from '../../lib/core/contracts';
 import type { CategoryRegistry } from '../../lib/core/registry';
 
@@ -34,11 +34,13 @@ export function ToolPanel<State, Context>({
         if (!disabled) onApply({ toolId: activeId, options: tool.parseOptions(options) });
       }}>
         <fieldset className="tool-controls" disabled={disabled}>
-          <tool.OptionsPanel
-            value={options}
-            context={context}
-            onChange={(value) => setDraft({ revision, options: { ...drafts, [activeId]: value } })}
-          />
+          <Suspense fallback={<p role="status">Opening tool…</p>}>
+            <tool.OptionsPanel
+              value={options}
+              context={context}
+              onChange={(value) => setDraft({ revision, options: { ...drafts, [activeId]: value } })}
+            />
+          </Suspense>
         </fieldset>
         <button className="button secondary apply" type="submit" aria-disabled={disabled}>Apply {tool.name.toLowerCase()}</button>
       </form>

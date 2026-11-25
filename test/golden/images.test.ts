@@ -2,16 +2,18 @@ import { readFile } from 'node:fs/promises';
 import { unzipSync } from 'fflate';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { defaultConvertOptions, outputFormats, type OutputFormat } from '../../lib/tools/image/formats';
+import { fullBounds, fullGeometry, type Bounds, type Orientation } from '../../lib/tools/image/geometry';
 import { decodeImage } from '../../lib/workers/image/codecs';
 import { detectFormat } from '../../lib/workers/image/headers';
 import { exportImage, exportZip, renderPreview } from '../../lib/workers/image/pipeline';
-import { orient } from '../../lib/workers/image/pixels';
+import { orient, renderGeometry } from '../../lib/workers/image/pixels';
 import { initializeWasm } from './wasm';
 
 const silent = () => {};
 const convert = (format: OutputFormat, quality = 85, background = '#ffffff') => (
   { toolId: 'convert', options: { ...defaultConvertOptions, format, quality, background } }
 );
+const crop = (orientation: Orientation, bounds: Bounds = fullBounds) => ({ toolId: 'crop', options: { bounds, orientation } });
 const fixture = async (name: string) => new File(
   [new Uint8Array(await readFile(new URL(`../fixtures/${name}`, import.meta.url)))], name,
 );
@@ -56,13 +58,52 @@ describe('WASM input goldens', () => {
     [8, [3, 6, 2, 5, 1, 4]],
   ] as const)('normalizes orientation %i', (orientation, pixels) => {
     const frame = new ImageData(new Uint8ClampedArray([1, 2, 3, 4, 5, 6].flatMap((value) => [value, 0, 0, 255])), 3, 2);
+    const preview = renderGeometry(frame, fullGeometry(frame, orientation));
+    expect([...preview.data.filter((_, index) => index % 4 === 0)]).toEqual(pixels);
     const result = orient(frame, orientation);
     expect([result.width, result.height]).toEqual(orientation >= 5 ? [2, 3] : [3, 2]);
+    expect(result.data.buffer).toBe(frame.data.buffer);
     expect([...result.data.filter((_, index) => index % 4 === 0)]).toEqual(pixels);
   });
 });
 
 describe('WASM export goldens', () => {
+  it('matches exact preview and export pixels after EXIF orientation, an odd crop, rotation, and both flips', async () => {
+    const original = await fixture('odd-oriented.png');
+    const edits = [
+      crop(1, { left: 1 / 3, top: 1 / 5, right: 1, bottom: 4 / 5 }),
+      crop(8), crop(2), crop(4),
+    ];
+    const expected = [9, 8, 7, 4, 3, 2].flatMap((value) => [value, 32, 64, 255]);
+    const preview = await renderPreview({ id: 'odd', original, commands: edits }, silent);
+    expect(preview.info).toMatchObject({ width: 3, height: 2 });
+    const first = await exportImage({ id: 'odd', original, commands: [convert('png'), ...edits] }, silent);
+    const last = await exportImage({ id: 'odd', original, commands: [...edits, convert('png')] }, silent);
+    for (const blob of [preview.blob, first.blob, last.blob]) {
+      const { frame } = await decodeImage(blob);
+      expect([frame.width, frame.height]).toEqual([3, 2]);
+      expect([...frame.data]).toEqual(expected);
+    }
+    const { load } = await import('exifreader');
+    expect(load(await last.blob.arrayBuffer(), { expanded: true }).exif).toBeUndefined();
+  });
+
+  it('projects a full-resolution crop onto the downsampled base with matching corner placement', async () => {
+    const original = await fixture('oriented.png');
+    const commands = [crop(6, { left: 0, top: 0, right: .5, bottom: 1 }), crop(4)];
+    const preview = await renderPreview({ id: 'scaled-crop', original, commands, maxEdge: 48 }, silent);
+    expect(preview.info).toMatchObject({ width: 48, height: 64 });
+    const { frame: sample } = await decodeImage(preview.blob);
+    const { blob } = await exportImage({ id: 'scaled-crop', original, commands }, silent);
+    const { frame } = await decodeImage(blob);
+    expect([sample.width, sample.height]).toEqual([24, 32]);
+    expect([frame.width, frame.height]).toEqual([48, 64]);
+    expect(rgba(sample, 0, 0)).toEqual([38, 170, 80, 255]);
+    expect(rgba(sample, 23, 31)).toEqual([255, 214, 60, 255]);
+    expect(rgba(frame, 0, 0)).toEqual(rgba(sample, 0, 0));
+    expect(rgba(frame, 47, 63)).toEqual(rgba(sample, 23, 31));
+  });
+
   it.each(['jpeg', 'png', 'webp', 'avif'] as const)('encodes decodable %s pixels with preserved dimensions', async (format) => {
     const original = await fixture('transparent.png');
     const { blob, name } = await exportImage({ id: 'alpha', original, commands: [convert(format, 90, '#000000')] }, silent);
@@ -115,6 +156,25 @@ describe('WASM export goldens', () => {
     expect([frame.width, frame.height]).toEqual([6000, 4000]);
     near(rgba(frame, 100, 100), [230, 65, 46, 255], 10);
   }, 30_000);
+
+  it('reuses the selected preview across background intake and export, then evicts it on selection change', async () => {
+    const first = { id: 'cached', original: await fixture('oriented.png'), commands: [] };
+    const second = { id: 'other', original: await fixture('transparent.png'), commands: [] };
+    const stages: string[] = [];
+    const progress = ({ stage }: { stage: string }) => stages.push(stage);
+    await renderPreview(first, progress);
+    await renderPreview({ ...first, maxEdge: 70 }, progress);
+    expect(stages.splice(0)).toEqual(['Decoding', 'Rendering preview', 'Rendering preview']);
+
+    await renderPreview({ ...second, cache: false }, progress);
+    await exportImage(first, progress);
+    await renderPreview({ ...first, maxEdge: 70, commands: [convert('avif')] }, progress);
+    expect(stages.splice(0)).toEqual(['Decoding', 'Rendering preview', 'Decoding', 'Encoding', 'Rendering preview']);
+
+    await renderPreview(second, progress);
+    await renderPreview(first, progress);
+    expect(stages).toEqual(['Decoding', 'Rendering preview', 'Decoding', 'Rendering preview']);
+  });
 
   it('archives each successful result with unique names and reports failures by file', async () => {
     const original = await fixture('transparent.png');

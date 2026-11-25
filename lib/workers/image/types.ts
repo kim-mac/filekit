@@ -8,7 +8,8 @@ export interface ImageRequest {
 }
 
 export interface PreviewRequest extends ImageRequest {
-  readonly maxEdge: number;
+  readonly maxEdge?: number;
+  readonly cache?: boolean;
 }
 
 export interface ImageInfo {
@@ -52,6 +53,7 @@ export interface ImageProgress {
 export type ProgressCallback = (progress: ImageProgress) => void;
 
 export interface ImageWorkerApi {
+  retainPreview(id: string): void;
   renderPreview(request: PreviewRequest, onProgress: ProgressCallback): Promise<PreviewResult>;
   exportImage(request: ImageRequest, onProgress: ProgressCallback): Promise<ImageExport>;
   exportZip(requests: readonly ImageRequest[], onProgress: ProgressCallback): Promise<ZipResult>;

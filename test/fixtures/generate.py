@@ -27,6 +27,10 @@ from_bytes(chart.mode, chart.size, chart.tobytes()).save(
     root / "container-oriented.heic", quality=95, chroma="444", exif=exif.tobytes()
 )
 
+odd = Image.new("RGB", (5, 3))
+odd.putdata([(value, 32, 64) for value in range(1, 16)])
+odd.save(root / "odd-oriented.png", exif=exif)
+
 alpha = Image.new("RGBA", chart.size, (0, 0, 0, 0))
 draw = ImageDraw.Draw(alpha)
 draw.rectangle((32, 8, 67, 55), fill=(65, 152, 241, 255))
