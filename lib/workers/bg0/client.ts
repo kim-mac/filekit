@@ -71,6 +71,7 @@ export async function runBackgroundWorker(request: RemovalRequest, signal: Abort
   const interrupt = new AbortController();
   const activity = setInterval(() => {
     if (performance.now() - lastProgress > 300_000) {
+      if (full) blockFull();
       interrupt.abort(new Error('Background removal stopped responding. Try again.'));
     }
   }, 5000);
@@ -84,12 +85,13 @@ export async function runBackgroundWorker(request: RemovalRequest, signal: Abort
     interrupt.abort();
   };
   window.addEventListener('pagehide', pagehide, { once: true });
-  const stopped = AbortSignal.any([signal, interrupt.signal]);
+  const stopped = () => signal.aborted || interrupt.signal.aborted;
   let reject!: (reason: unknown) => void;
   const untilStopped = new Promise<never>((_, fail) => { reject = fail; });
-  const abort = () => reject(stopped.reason);
-  stopped.addEventListener('abort', abort, { once: true });
-  if (stopped.aborted) abort();
+  const abort = () => reject(signal.aborted ? signal.reason : interrupt.signal.reason);
+  signal.addEventListener('abort', abort, { once: true });
+  interrupt.signal.addEventListener('abort', abort, { once: true });
+  if (stopped()) abort();
   const fail = () => {
     if (full) blockFull();
     reject(new Error(full ? 'Full mode stopped. Try again in Lite mode.' : 'Background removal stopped. Try again.'));
@@ -105,14 +107,15 @@ export async function runBackgroundWorker(request: RemovalRequest, signal: Abort
           full = update.full;
           if (full) setMarker(crypto.randomUUID());
         }
-        if (!stopped.aborted) report(update);
+        if (!stopped()) report(update);
       })),
       untilStopped,
     ]);
   } finally {
     clearInterval(activity);
     clearMarker();
-    stopped.removeEventListener('abort', abort);
+    signal.removeEventListener('abort', abort);
+    interrupt.signal.removeEventListener('abort', abort);
     window.removeEventListener('pagehide', pagehide);
     remote[releaseProxy]();
     worker.terminate();

@@ -1,6 +1,7 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import sharp from 'sharp';
-import { downloadResult, openImageWorkspace, pick, waitForImage } from './helpers';
+import { downloadResult, fixtureBytes, openImageWorkspace, pick, waitForImage } from './helpers';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -10,6 +11,8 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   test.setTimeout(300_000);
   const origin = new URL(baseURL!).origin;
   const violations: string[] = [];
+  const modelPath = 'public/bg-model-source/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/onnx/model_fp16.onnx.json';
+  const { sha256 } = JSON.parse(await readFile(modelPath, 'utf8'));
   let chunks = 0;
   let cancelDownload = true;
   let allowChunk!: () => void;
@@ -20,10 +23,10 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
     const url = new URL(request.url());
     if (url.origin !== origin || request.method() !== 'GET' || request.postDataBuffer() ||
       /portrait-wind|private-bg-fixture/i.test(request.url())) {
-      violations.push(request.url());
+      violations.push(`${request.method()} ${request.url()} body=${request.postDataBuffer()?.length ?? 0} type=${request.resourceType()}`);
       return route.abort();
     }
-    if (/\/bg-models\/chunks\//.test(url.pathname)) {
+    if (url.pathname.startsWith(`/bg-models/chunks/${sha256}/`)) {
       chunks++;
       if (cancelDownload) {
         await chunkHeld;
@@ -40,7 +43,7 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   await button('Remove background').click();
   await button('Apply remove background').click();
   try {
-    await expect.poll(() => chunks).toBeGreaterThan(0);
+    await expect.poll(() => chunks, { timeout: 30_000 }).toBeGreaterThan(0);
     await button('Cancel edit').click();
     await expect(page.getByText('Edit canceled.')).toBeVisible();
     await expect(button('Undo')).toBeDisabled();
@@ -86,5 +89,14 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   const square = await sharp(cropped.bytes).metadata();
   expect(square.width).toBe(square.height);
   expect(square.width).toBeLessThanOrEqual(Math.min(metadata.width!, metadata.height!));
+  await page.getByLabel('Image files').setInputFiles({
+    name: 'private-bg-fixture.jpg', mimeType: 'image/jpeg', buffer: await fixtureBytes('bg/portrait-wind.jpg'),
+  });
+  await page.getByRole('button', { name: /private-bg-fixture\.jpg/ }).click();
+  await waitForImage(page, 'private-bg-fixture.jpg');
+  await button('Remove background').click();
+  await button('Apply remove background').click();
+  await expect(tools.getByText(/Quality mode Lite/)).toBeVisible({ timeout: 90_000 });
+  expect(chunks).toBe(firstDownloadCount);
   expect(violations).toEqual([]);
 });

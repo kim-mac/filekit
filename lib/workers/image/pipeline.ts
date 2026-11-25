@@ -2,7 +2,7 @@ import { Zip, ZipPassThrough } from 'fflate';
 import { sameBackground, type BackgroundOptions } from '../../tools/image/background-options';
 import { compositeBackground } from './background';
 import { imageTools } from '../../tools/image';
-import { defaultConvertOptions, defaultOutput, outputName } from '../../tools/image/formats';
+import { defaultConvertOptions, defaultOutput, outputName, type ConvertOptions } from '../../tools/image/formats';
 import { fullGeometry, geometrySize, sameGeometry, scaleGeometry, type ImageGeometry } from '../../tools/image/geometry';
 import { decodeImage, encodeImage } from './codecs';
 import { flatten, hasTransparency, previewMaxEdge, renderGeometry, resizePreview } from './pixels';
@@ -96,7 +96,7 @@ export async function renderPreview(request: PreviewRequest, progress: ProgressC
   const { geometry, output: conversion, backgroundEdit } = await imageTools.replay({
     geometry: fullGeometry(source), output: defaultOutput(format),
   }, request.commands);
-  const output = backgroundEdit ? { ...conversion, background: backgroundEdit.color } : conversion;
+  const output = outputForBackground(conversion, backgroundEdit, request);
   const maxEdge = backgroundEdit?.mask?.outputMaxEdge;
   const previewBase = maxEdge ? resizePreview(base, maxEdge) : base;
   const dimensions = maxEdge ? cappedSize(source, maxEdge) : source;
@@ -127,15 +127,23 @@ function cappedSize(frame: { width: number; height: number }, edge: number) {
   return { width: Math.max(1, Math.floor(frame.width * scale)), height: Math.max(1, Math.floor(frame.height * scale)) };
 }
 
+function outputForBackground(output: ConvertOptions, edit: BackgroundOptions | undefined, request: ImageRequest): ConvertOptions {
+  if (!edit) return output;
+  const explicitFormat = request.commands.some(command => command.toolId === 'convert');
+  const format = edit.mode === 'transparent' && output.format === 'jpeg' && !explicitFormat ? 'png' : output.format;
+  return { ...output, format, background: edit.color };
+}
+
 async function prepareExport(request: ImageRequest, report: ReportStage) {
   releaseFullPreview();
   // The matte is stored in EXIF-normalized source coordinates. Keep the
   // existing in-place EXIF/crop path for files without a background edit.
   const hasBackground = request.commands.some(command => command.toolId === 'remove-background');
   const { frame: original, format, orientation } = await decodeOriginal(request.original, report, hasBackground);
-  const { geometry, output, backgroundEdit } = await imageTools.replay({
+  const { geometry, output: conversion, backgroundEdit } = await imageTools.replay({
     geometry: fullGeometry(original, hasBackground ? 1 : orientation), output: defaultOutput(format),
   }, request.commands);
+  const output = outputForBackground(conversion, backgroundEdit, request);
   // The AVIF wrapper reads the entire backing buffer, so crops need a dense raster.
   const mode = output.format === 'avif' ? 'orient' : 'compact';
   if (!backgroundEdit) return { frame: renderGeometry(original, geometry, mode), output };
@@ -143,7 +151,7 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
   const bounded = maxEdge ? resizePreview(original, maxEdge) : original;
   const mapped = maxEdge ? scaleGeometry(geometry, original, bounded) : geometry;
   await compositeBackground(bounded, backgroundEdit);
-  return { frame: renderGeometry(bounded, mapped, mode), output: { ...output, background: backgroundEdit.color } };
+  return { frame: renderGeometry(bounded, mapped, mode), output };
 }
 
 async function encodeRequest(request: ImageRequest, report: ReportStage): Promise<ImageExport> {

@@ -3,13 +3,14 @@ import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import type { CategoryRegistry } from '../../lib/core/registry';
 
 export function ToolPanel<State, Context>({
-  registry, context, initialOptions, revision, onApply, disabled,
+  registry, context, initialOptions, revision, onApply, onBusyChange, disabled,
 }: {
   registry: CategoryRegistry<State, Context>;
   context: Context;
   initialOptions: Readonly<Record<string, unknown>>;
   revision: object;
   onApply: (command: EditCommand) => void;
+  onBusyChange: (busy: boolean) => void;
   disabled: boolean;
 }) {
   const tools = registry.list();
@@ -22,10 +23,13 @@ export function ToolPanel<State, Context>({
     setProgress(undefined);
     setStatus('');
     return () => {
-      activeJob.current?.abort();
-      activeJob.current = null;
+      if (activeJob.current) {
+        activeJob.current.abort();
+        activeJob.current = null;
+        onBusyChange(false);
+      }
     };
-  }, [revision]);
+  }, [onBusyChange, revision]);
   const drafts = draft?.revision === revision ? draft.options : {};
   if (!activeId) return null;
   const tool = registry.get(activeId);
@@ -40,6 +44,7 @@ export function ToolPanel<State, Context>({
       setStatus('');
       if (tool.prepareOptions) {
         activeJob.current = controller;
+        onBusyChange(true);
         setProgress({ message: 'Preparing edit…', progress: 0 });
         value = await tool.prepareOptions(value, context, controller.signal, update => {
           if (!controller.signal.aborted) setProgress(update);
@@ -51,6 +56,7 @@ export function ToolPanel<State, Context>({
     } finally {
       if (activeJob.current === controller) {
         activeJob.current = null;
+        onBusyChange(false);
         setProgress(undefined);
       }
     }
@@ -86,6 +92,7 @@ export function ToolPanel<State, Context>({
             <button className="button secondary" type="button" onClick={() => {
               activeJob.current?.abort();
               activeJob.current = null;
+              onBusyChange(false);
               setProgress(undefined);
               setStatus('Edit canceled.');
             }}>Cancel edit</button>

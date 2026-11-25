@@ -119,10 +119,20 @@ diff --git a/node_modules/@bg0/browser/dist/models.js b/node_modules/@bg0/browse
  }
  export function engineKey(choice) {
      return `${choice.definition.id}:${choice.definition.revision}:${choice.provider}`;
-@@ -72,16 +72,6 @@
+@@ -56,7 +56,7 @@
+                 ? await requestAdapterWithin(hardware.gpu, options.adapterTimeoutMs ?? ADAPTER_TIMEOUT_MS)
+                 : null;
+             if (adapter &&
+-                !adapter.isFallbackAdapter &&
++                !adapter.isFallbackAdapter && !adapter.info?.isFallbackAdapter &&
+                 adapter.features.has('shader-f16')) {
+                 // These are admission heuristics, not a VRAM measurement. Runtime
+                 // failures still fall back. Do not gate on CPU count or GPU branding.
+@@ -71,16 +71,6 @@
+         catch {
              // An exposed API may still be disabled by browser policy or the driver.
          }
-     }
+-    }
 -    // CPU-only desktops can still afford the full weights. iOS has a tighter
 -    // tab budget and already requires the single-threaded compatibility path.
 -    // Do not retry the large model on CPU after a GPU failure: use lite instead.
@@ -132,10 +142,9 @@ diff --git a/node_modules/@bg0/browser/dist/models.js b/node_modules/@bg0/browse
 -        (hardware.hardwareConcurrency ?? 0) >= 4 &&
 -        !shouldUseSingleThreadedWasm(hardware.userAgent, hardware.maxTouchPoints)) {
 -        choices.push({ definition: FULL_MODEL, provider: 'wasm' });
--    }
+     }
      choices.push({ definition: LITE_MODEL, provider: 'wasm' });
      return choices;
- }
 diff --git a/node_modules/@bg0/browser/dist/vendor/ios/worker.mjs b/node_modules/@bg0/browser/dist/vendor/ios/worker.mjs
 --- a/node_modules/@bg0/browser/dist/vendor/ios/worker.mjs
 +++ b/node_modules/@bg0/browser/dist/vendor/ios/worker.mjs

@@ -14,7 +14,7 @@ const publicRoot = 'public';
 const chunkSize = 23 * 2 ** 20;
 const models = {
   lite: { repository: 'studioludens/birefnet-lite-512', revision: '4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7',
-    bytes: 98_484_532 },
+    bytes: 98_484_532, sha256: 'eff9216bb2f9d3f023d9c2b7196845a7485739ab1f231593633e4d2344ffc516' },
   full: { repository: 'naddy24/birefnet-512-webgpu', revision: 'ca02a86c094927479e2be583abe87f8ea73fcfda',
     bytes: 473_435_223 },
 };
@@ -97,7 +97,7 @@ async function stageChunks(file, bytes, sha256, manifestPath) {
 }
 
 async function stageModel(tier) {
-  const { repository, revision, bytes } = models[tier];
+  const { repository, revision, bytes, sha256: expectedDigest } = models[tier];
   const hub = `https://huggingface.co/${repository}`;
   const raw = `${hub}/raw/${revision}`;
   const resolve = `${hub}/resolve/${revision}`;
@@ -117,7 +117,7 @@ async function stageModel(tier) {
   }
   const pointer = await text(model, `${tier}.pointer`);
   const sha256 = /^oid sha256:([a-f0-9]{64})$/m.exec(pointer)?.[1];
-  if (!sha256 || !pointer.startsWith('version https://git-lfs.github.com/spec/v1') ||
+  if (!sha256 || (expectedDigest && sha256 !== expectedDigest) || !pointer.startsWith('version https://git-lfs.github.com/spec/v1') ||
     Number(/^size (\d+)$/m.exec(pointer)?.[1]) !== bytes) {
     throw new Error(`The immutable ${tier} model pointer has unexpected metadata`);
   }

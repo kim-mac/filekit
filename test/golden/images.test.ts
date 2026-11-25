@@ -245,3 +245,22 @@ describe('background removal compositing', () => {
     else expect(rgba(firstPixels, 50, 1)[3]).toBe(0);
   });
 });
+
+it('uses original desktop dimensions and the disclosed iOS output cap after rotation', async () => {
+  const original = await fixture('large-6000x4000.jpg');
+  const createEdit = (outputMaxEdge?: 1280) => ({
+    toolId: 'remove-background',
+    options: { mode: 'transparent', color: '#104e32', mask: {
+      id: 'cap', width: 3, height: 2, alpha: new Blob([Uint8Array.of(0, 0, 255, 0, 0, 255)]),
+      tier: 'Lite', provider: 'wasm', outputMaxEdge,
+    } },
+  });
+  const preview = await renderPreview({ id: 'full-bg', original, commands: [crop(6), createEdit()], maxEdge: 120 }, silent);
+  expect(preview.info).toMatchObject({ width: 4000, height: 6000, output: { format: 'png' } });
+  const request = { id: 'phone-bg', original, commands: [createEdit(1280), crop(6)] };
+  const bounded = await renderPreview({ ...request, maxEdge: 120 }, silent);
+  expect(bounded.info).toMatchObject({ width: 853, height: 1280, output: { format: 'png' } });
+  const result = await exportImage(request, silent);
+  const { frame } = await decodeImage(result.blob);
+  expect([frame.width, frame.height]).toEqual([853, 1280]);
+});

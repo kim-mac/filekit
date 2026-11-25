@@ -60,6 +60,7 @@ export function ImageWorkspace() {
   const [selectedId, setSelectedId] = useState<string>();
   const [preview, setPreview] = useState<Preview>();
   const [previewProgress, setPreviewProgress] = useState<ImageProgress>();
+  const [toolBusy, setToolBusy] = useState(false);
   const [exportJob, setExportJob] = useState<ExportJob>();
   const [exportProgress, setExportProgress] = useState<ImageProgress>();
   const [download, setDownload] = useState<ImageExport>();
@@ -76,12 +77,13 @@ export function ImageWorkspace() {
   const shownPreview = preview?.id === selected?.id ? preview : undefined;
   const previewIsCurrent = Boolean(shownPreview && shownPreview.stack === selected?.stack);
   const shouldPreviewSelection = selected?.status === 'pending' || (selected?.status === 'ready' && !previewIsCurrent);
-  const work = exportJob ? undefined : shouldPreviewSelection ? selected : entries.find((entry) => entry.status === 'pending');
+  const jobsLocked = Boolean(exportJob) || toolBusy;
+  const work = jobsLocked ? undefined : shouldPreviewSelection ? selected : entries.find((entry) => entry.status === 'pending');
   const previewUrl = useObjectUrl(shownPreview?.result.blob);
   const downloadUrl = useObjectUrl(download?.blob);
   const selectedInfo = selected?.info;
   const activeId = selected?.id;
-  const toolsDisabled = !previewIsCurrent || selected?.status !== 'ready' || Boolean(exportJob);
+  const toolsDisabled = !previewIsCurrent || selected?.status !== 'ready' || jobsLocked || Boolean(work);
 
   const updateEntry = useCallback((id: string, update: Partial<Entry>) => {
     setEntries((current) => current.map((entry) => entry.id === id ? { ...entry, ...update } : entry));
@@ -164,7 +166,7 @@ export function ImageWorkspace() {
   useEffect(() => () => client.stop(), [client]);
 
   const addFiles = useCallback((files: readonly File[]) => {
-    if (!files.length || exportJob) return;
+    if (!files.length || jobsLocked) return;
     const added = files.map((file): Entry => ({
       id: crypto.randomUUID(), stack: createEditStack(file), status: 'pending',
     }));
@@ -172,7 +174,7 @@ export function ImageWorkspace() {
     setSelectedId((current) => current ?? added[0].id);
     setDownload(undefined);
     setNotice('');
-  }, [exportJob]);
+  }, [jobsLocked]);
 
   function remove(entry: Entry) {
     const index = entries.indexOf(entry);
@@ -201,12 +203,12 @@ export function ImageWorkspace() {
           if (file) files.push(file);
         }
       }
-      if (!files.length || exportJob) return;
+      if (!files.length || jobsLocked) return;
       event.preventDefault();
       addFiles(files);
     };
     const keydown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || (!event.metaKey && !event.ctrlKey) || event.altKey || exportJob) return;
+      if (event.defaultPrevented || (!event.metaKey && !event.ctrlKey) || event.altKey || jobsLocked) return;
       const key = event.key.toLowerCase();
       if (key === 'o') {
         event.preventDefault();
@@ -224,11 +226,11 @@ export function ImageWorkspace() {
       window.removeEventListener('paste', paste);
       window.removeEventListener('keydown', keydown);
     };
-  }, [addFiles, edit, exportJob, previewIsCurrent, selected]);
+  }, [addFiles, edit, jobsLocked, previewIsCurrent, selected]);
 
   function selectAdjacent(direction: number) {
     const next = entries[selectionIndex + direction];
-    if (next && !exportJob) setSelectedId(next.id);
+    if (next && !jobsLocked) setSelectedId(next.id);
   }
 
   function startExport(kind: ExportJob['kind'], files: readonly Entry[]) {
@@ -252,12 +254,12 @@ export function ImageWorkspace() {
         if (!event.dataTransfer.types.includes('Files')) return;
         event.preventDefault();
         dragDepth.current++;
-        if (!exportJob) setDragging(true);
+        if (!jobsLocked) setDragging(true);
       }}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes('Files')) return;
         event.preventDefault();
-        event.dataTransfer.dropEffect = exportJob ? 'none' : 'copy';
+        event.dataTransfer.dropEffect = jobsLocked ? 'none' : 'copy';
       }}
       onDragLeave={() => {
         dragDepth.current = Math.max(0, dragDepth.current - 1);
@@ -272,7 +274,7 @@ export function ImageWorkspace() {
     >
       <div className="workspace-heading">
         <h1>Images</h1>
-        <button className="button primary" onClick={() => picker.current?.click()} disabled={Boolean(exportJob)}>
+        <button className="button primary" onClick={() => picker.current?.click()} disabled={jobsLocked}>
           <Plus size={19} aria-hidden /> Add images
         </button>
         <input
@@ -294,11 +296,11 @@ export function ImageWorkspace() {
             <h2 id="preview-title">Preview</h2>
             {entries.length > 1 && (
               <div className="preview-navigation">
-                <button className="icon-button" aria-label="Previous image" disabled={selectionIndex <= 0 || Boolean(exportJob)} onClick={() => selectAdjacent(-1)}>
+                <button className="icon-button" aria-label="Previous image" disabled={selectionIndex <= 0 || jobsLocked} onClick={() => selectAdjacent(-1)}>
                   <ChevronLeft size={19} aria-hidden />
                 </button>
                 <span>{selectionIndex + 1} / {entries.length}</span>
-                <button className="icon-button" aria-label="Next image" disabled={selectionIndex >= entries.length - 1 || Boolean(exportJob)} onClick={() => selectAdjacent(1)}>
+                <button className="icon-button" aria-label="Next image" disabled={selectionIndex >= entries.length - 1 || jobsLocked} onClick={() => selectAdjacent(1)}>
                   <ChevronRight size={19} aria-hidden />
                 </button>
               </div>
@@ -352,9 +354,9 @@ export function ImageWorkspace() {
           <div className="preview-footer">
             <span>{selectedInfo ? `${selectedInfo.width} × ${selectedInfo.height} px` : 'Dimensions appear after decoding'}</span>
             <div className="history-buttons" role="group" aria-label="Edit history">
-              <button className="icon-button" aria-label="Undo" title="Undo (Ctrl/⌘ Z)" disabled={!previewIsCurrent || !selected?.stack.cursor || Boolean(exportJob)}
+              <button className="icon-button" aria-label="Undo" title="Undo (Ctrl/⌘ Z)" disabled={!previewIsCurrent || !selected?.stack.cursor || jobsLocked}
                 onClick={() => selected && edit(selected, undo(selected.stack))}><Undo2 size={18} aria-hidden /></button>
-              <button className="icon-button" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)" disabled={!previewIsCurrent || !selected || selected.stack.cursor >= selected.stack.commands.length || Boolean(exportJob)}
+              <button className="icon-button" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)" disabled={!previewIsCurrent || !selected || selected.stack.cursor >= selected.stack.commands.length || jobsLocked}
                 onClick={() => selected && edit(selected, redo(selected.stack))}><Redo2 size={18} aria-hidden /></button>
             </div>
           </div>
@@ -368,7 +370,7 @@ export function ImageWorkspace() {
               {entries.map((entry) => (
                 <li key={entry.id}>
                   <div className="file-row">
-                    <button className="select-file" aria-current={entry.id === selected?.id} disabled={Boolean(exportJob)}
+                    <button className="select-file" aria-current={entry.id === selected?.id} disabled={jobsLocked}
                       onClick={() => setSelectedId(entry.id)}>
                       <span>{entry.stack.original.name}</span>
                       <small>
@@ -379,7 +381,7 @@ export function ImageWorkspace() {
                             : entry.status === 'ready' ? 'Ready' : entry.status === 'pending' ? 'Queued' : entry.status === 'paused' ? 'Canceled' : 'Could not open'}
                       </small>
                     </button>
-                    <button className="icon-button remove-file" aria-label={`Remove ${entry.stack.original.name}`} disabled={Boolean(exportJob)}
+                    <button className="icon-button remove-file" aria-label={`Remove ${entry.stack.original.name}`} disabled={jobsLocked}
                       onClick={() => remove(entry)}><X size={17} aria-hidden /></button>
                   </div>
                   {(entry.error || entry.exportError) && <p className="file-error" role="alert">{entry.error || entry.exportError}</p>}
@@ -404,6 +406,7 @@ export function ImageWorkspace() {
                   convert: selectedInfo.output,
                 }}
                 disabled={toolsDisabled}
+                onBusyChange={setToolBusy}
                 onApply={(command: EditCommand) => edit(selected, recordEdit(selected.stack, command))} />
             )}
             {(!selected || !selectedInfo) && <p className="section-note">Select a decoded image to edit its output.</p>}
@@ -419,11 +422,11 @@ export function ImageWorkspace() {
               </p>}
               <p className="section-note">Exports use the original pixels and strip EXIF metadata.</p>
               <div className="export-buttons">
-                <button className="button primary" disabled={selected?.status !== 'ready' || !previewIsCurrent || Boolean(exportJob)}
+                <button className="button primary" disabled={selected?.status !== 'ready' || !previewIsCurrent || jobsLocked}
                   onClick={() => selected && startExport('image', [selected])}>
                   <ArrowDownToLine size={17} aria-hidden /> Export image
                 </button>
-                <button className="button secondary" disabled={completed.length < 2 || Boolean(exportJob) || Boolean(work) || entries.some(({ status }) => status === 'paused')}
+                <button className="button secondary" disabled={completed.length < 2 || jobsLocked || Boolean(work) || entries.some(({ status }) => status === 'paused')}
                   onClick={() => startExport('zip', completed)}>
                   <Archive size={17} aria-hidden /> Export ZIP
                 </button>

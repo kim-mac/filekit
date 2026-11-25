@@ -19,14 +19,20 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: '24'
+          node-version: '24.22.3'
           cache: npm
       - run: npm ci
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - id: bg0-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .cache/bg0-assets/
           key: bg0-lite-${{ hashFiles('scripts/bg-assets.mjs', 'vendor/bg0-browser-0.1.2.tgz') }}
       - run: npm run bg:assets -- lite
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        if: steps.bg0-cache.outputs.cache-hit != 'true'
+        with:
+          path: .cache/bg0-assets/
+          key: ${{ steps.bg0-cache.outputs.cache-primary-key }}
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:all
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
