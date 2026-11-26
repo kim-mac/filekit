@@ -38,11 +38,10 @@ export const removeBackgroundTool: ToolDefinition<ImageState, BackgroundOptions,
       </div>
     );
   },
-  async prepareOptions(options, { original, releaseImageMemory }, signal, report) {
+  async prepareOptions(options, { original, aiResults, releaseImageMemory }, signal, report) {
     if (options.mask) return options;
-    await releaseImageMemory();
     const { generateBackgroundMask } = await import('../../workers/bg0/client');
-    const mask = await generateBackgroundMask(original, signal, report);
+    const mask = await generateBackgroundMask(original, aiResults, releaseImageMemory, signal, report);
     return { ...options, mask };
   },
   async apply(input, options) {

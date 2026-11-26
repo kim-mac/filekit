@@ -51,7 +51,9 @@ const conversionDigests = {
 for (const [label, format, extension] of [
   ['JPG', 'jpeg', 'jpg'], ['PNG', 'png', 'png'], ['WebP', 'webp', 'webp'], ['AVIF', 'heif', 'avif'],
 ] as const) {
-  test(`converts to ${label} with the same dimensions, controls, and quality`, async ({ page }) => {
+  test(`converts to ${label} with the same dimensions, controls, and quality`, async ({ page, browserName, context }) => {
+    const codecAssets = new Set<string>();
+    if (label === 'AVIF') context.on('request', request => codecAssets.add(new URL(request.url()).pathname));
     await openImageWorkspace(page);
     await pick(page, 'transparent.png');
     await waitForImage(page, 'transparent.png');
@@ -72,7 +74,16 @@ for (const [label, format, extension] of [
     const { data } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     if (format === 'jpeg') expect([...data.subarray(0, 4)]).toEqual([0, 0, 0, 255]);
     else expect(data[3]).toBe(0);
-    if (label === 'AVIF') expect(metadata.compression).toBe('av1');
+    if (label === 'AVIF') {
+      expect(metadata.compression).toBe('av1');
+      const canThread = await page.evaluate(() => crossOriginIsolated && navigator.hardwareConcurrency > 1);
+      if (browserName === 'chromium' && canThread) {
+        expect([...codecAssets]).toEqual(expect.arrayContaining([
+          expect.stringMatching(/^\/workers\/avif_enc_mt\.worker-.*\.mjs$/),
+          '/workers/avif_enc_mt.js',
+        ]));
+      }
+    }
     expect(sha256(result.bytes)).toBe(conversionDigests[label]);
   });
 }

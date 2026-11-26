@@ -73,6 +73,7 @@ test('lazy codec, face detection, and upscale assets stay same origin and files 
     expect.stringMatching(/\/workers\/image\.worker\.js$/),
     expect.stringMatching(/\/workers\/mozjpeg_dec-.*\.wasm$/),
     expect.stringMatching(faceModel),
+    expect.stringMatching(/\/fonts\/InterVariable\.woff2$/),
     expect.stringMatching(upscaleChunk),
     expect.stringMatching(/\/bg-runtime\/onnx\/ort-wasm-simd-threaded\.wasm$/),
   ]));

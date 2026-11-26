@@ -1,9 +1,10 @@
 import { Maximize } from 'lucide-react';
+import { isMobileDevice } from '../../core/device';
 import type { ToolDefinition } from '../../core/contracts';
 import models from '../../workers/upscale/models.json';
 import type { ImageToolContext } from './context';
 import type { ImageState } from './formats';
-import { defaultUpscale, isMobileUpscale, parseUpscale, upscaleLimitError, upscaleSize, type UpscaleOptions } from './upscale-options';
+import { defaultUpscale, parseUpscale, upscaleLimitError, upscaleSize, type UpscaleOptions } from './upscale-options';
 
 export const upscaleTool: ToolDefinition<ImageState, UpscaleOptions, ImageState, ImageToolContext> = {
   id: 'upscale',
@@ -13,10 +14,10 @@ export const upscaleTool: ToolDefinition<ImageState, UpscaleOptions, ImageState,
   defaultOptions: defaultUpscale,
   parseOptions: parseUpscale,
   getApplyError(options, { size }) {
-    return upscaleLimitError(upscaleSize(size, options.scale), isMobileUpscale());
+    return upscaleLimitError(upscaleSize(size, options.scale), isMobileDevice());
   },
   OptionsPanel({ value: options, context, onChange }) {
-    const mobile = isMobileUpscale();
+    const mobile = isMobileDevice();
     const { width, height } = upscaleSize(context.size, options.scale);
     const error = upscaleLimitError({ width, height }, mobile);
     const model = models[options.mode === 'photo' ? 'general' : 'anime'];
@@ -55,7 +56,7 @@ export const upscaleTool: ToolDefinition<ImageState, UpscaleOptions, ImageState,
     );
   },
   async prepareOptions(options, context, signal, report) {
-    const value = { ...options, mobile: isMobileUpscale() };
+    const value = { ...options, mobile: isMobileDevice() };
     await context.preparePreview({ toolId: 'upscale', options: value }, signal, report);
     return value;
   },

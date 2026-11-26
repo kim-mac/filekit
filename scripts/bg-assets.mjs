@@ -27,6 +27,7 @@ for (const filename of ['bg0-Apache-2.0.txt', 'BiRefNet-MIT.txt', 'Transformers-
   await copy(join('licenses/bg0', filename), join(publicRoot, 'licenses', filename));
 }
 await copy('licenses/upscale/Real-ESRGAN-BSD-3-Clause.txt', join(publicRoot, 'licenses/Real-ESRGAN-BSD-3-Clause.txt'));
+await copy('licenses/inter/Inter-OFL.txt', join(publicRoot, 'licenses/Inter-OFL.txt'));
 await copy('THIRD_PARTY_NOTICES.md', join(publicRoot, 'licenses/THIRD_PARTY_NOTICES.md'));
 await copy('LICENSE', join(publicRoot, 'licenses/FileKit-MIT.txt'));
 
@@ -153,6 +154,7 @@ for (const filename of ['worker.mjs', 'BiRefNet-LICENSE.txt', 'ONNX-Runtime-LICE
   await copy(join(iosPackage, filename), join(ios, filename));
 }
 await copy('lib/workers/bg0/asset-stream.mjs', join(ios, 'asset-stream.mjs'));
+await copy('lib/workers/wasm-threads.mjs', join(ios, 'wasm-threads.mjs'));
 
 for (const tier of selected) {
   if (tier !== 'ios') {

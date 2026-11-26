@@ -22,13 +22,6 @@ export function parseUpscale(value: unknown): UpscaleOptions {
   return { scale: options.scale, mode: options.mode, mobile: options.mobile };
 }
 
-export function isMobileUpscale() {
-  if (typeof navigator === 'undefined') return false;
-  const agent = navigator.userAgent;
-  return /Android|iPhone|iPad|iPod/i.test(agent) ||
-    (agent.includes('Macintosh') && navigator.maxTouchPoints > 1);
-}
-
 export function upscaleLimits(mobile: boolean) {
   return mobile ? { pixels: 16_000_000, edge: 8192 } : { pixels: 64_000_000, edge: 16380 };
 }

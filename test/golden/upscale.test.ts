@@ -8,8 +8,9 @@ import { defaultConvertOptions } from '../../lib/tools/image/formats';
 import { fullBounds } from '../../lib/tools/image/geometry';
 import { upscaleLimitError, upscaleSize, type UpscaleOptions } from '../../lib/tools/image/upscale-options';
 import { decodeImage, encodeImage } from '../../lib/workers/image/codecs';
-import { exportImage, renderDraft, renderPreview } from '../../lib/workers/image/pipeline';
+import { exportImage, renderDraft, renderPreview, retainPreview } from '../../lib/workers/image/pipeline';
 import models from '../../lib/workers/upscale/models.json';
+import { runUpscale } from '../../lib/workers/upscale/inference';
 import { upscaleTiles, tileInput } from '../../lib/workers/upscale/tiles';
 import { initializeWasm } from './wasm';
 
@@ -44,7 +45,7 @@ async function infer(model: keyof typeof models, { data, width, height }: Return
 // Browser transport is exercised in Playwright. Use the same weights,
 // ONNX Runtime WASM engine and production compositor with local assets here.
 vi.mock('../../lib/workers/upscale/inference', () => ({
-  async runUpscale(frame: ImageData, options: UpscaleOptions) {
+  runUpscale: vi.fn(async (frame: ImageData, options: UpscaleOptions) => {
     const error = upscaleLimitError(upscaleSize(frame, options.scale), options.mobile);
     if (error) throw new Error(error);
     const model = options.mode === 'photo' ? 'general' : 'anime';
@@ -53,7 +54,7 @@ vi.mock('../../lib/workers/upscale/inference', () => ({
         input => infer(model, input), silent),
       quality: { model: models[model].label, provider: 'wasm' },
     };
-  },
+  }),
 }));
 
 function pattern(width: number, height: number) {
@@ -127,4 +128,30 @@ it('projects a source-space matte after crop and upscale, with working blur draf
     expect(at(0)).toBe(0);
     expect(at(47)).toBe(255);
   }
+});
+
+it('exports an unchanged preview stage without inference and keeps its alpha for the next export', async () => {
+  const factor = upscale(4);
+  const original = new File([await encodeImage(pattern(13, 9), defaultConvertOptions)], 'cache.png');
+  const request = { id: 'export-cache', original, commands: [factor] };
+  const run = vi.mocked(runUpscale);
+  run.mockClear();
+  await renderPreview({ ...request, maxEdge: 16 }, silent);
+  expect(run).toHaveBeenCalledTimes(1);
+
+  const jpeg = { toolId: 'convert', options: { ...defaultConvertOptions, format: 'jpeg' } };
+  const lossy = await exportImage({ ...request, commands: [factor, jpeg] }, silent);
+  expect((await decodeImage(lossy.blob)).frame).toMatchObject({ width: 52, height: 36 });
+  const png = await exportImage(request, silent);
+  expect((await decodeImage(png.blob)).frame.data[3]).toBe(100);
+  expect(run).toHaveBeenCalledTimes(1);
+
+  await renderPreview({ ...request, commands: [cropAndRotate, factor] }, silent);
+  expect(run).toHaveBeenCalledTimes(2);
+  await exportImage({ ...request, commands: [cropAndRotate, factor, rotateAgain] }, silent);
+  expect(run).toHaveBeenCalledTimes(2);
+
+  retainPreview('another-file');
+  await exportImage(request, silent);
+  expect(run).toHaveBeenCalledTimes(3);
 });

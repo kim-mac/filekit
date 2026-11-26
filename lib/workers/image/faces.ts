@@ -1,26 +1,27 @@
+import { wasmThreads } from '../wasm-threads.mjs';
 import { InferenceSession, Tensor, env } from 'onnxruntime-web/wasm';
 import type { Bounds } from '../../tools/image/geometry';
 import { resizePreview } from './pixels';
+import { yuNetSha256 } from './face-model';
 
 const modelUrl = '/face-models/yunet.onnx';
-const modelHash = 'be449cd884ae1bc17e089b78e132e80df959b88452f32c487c6fb0a8c8e27f14';
 const runtimeName = 'ort-wasm-simd-threaded';
 const anchors = [[10, 16, 24], [32, 48], [64, 96], [128, 192, 256]];
 
 let detector: Promise<InferenceSession> | undefined;
 
-function loadDetector() {
+function loadDetector(mobile: boolean) {
   detector ??= (async () => {
     const response = await fetch(modelUrl, { redirect: 'error' });
     if (!response.ok) throw new Error('Could not load the local face detector.');
     const weights = await response.arrayBuffer();
     const digest = await crypto.subtle.digest('SHA-256', weights);
     const hex = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-    if (hex !== modelHash) throw new Error('Could not verify the local face detector.');
+    if (hex !== yuNetSha256) throw new Error('Could not verify the local face detector.');
 
     const runtime = new URL('/bg-runtime/onnx/', location.origin).href;
     env.wasm.wasmPaths = { mjs: `${runtime}${runtimeName}.mjs`, wasm: `${runtime}${runtimeName}.wasm` };
-    env.wasm.numThreads = 1;
+    env.wasm.numThreads = wasmThreads(mobile);
     env.wasm.proxy = false;
     return InferenceSession.create(weights, { executionProviders: ['wasm'] });
   })().catch(error => {
@@ -56,7 +57,12 @@ export async function findYuNetFaces(frame: ImageData, session: InferenceSession
   }
 
   const tensor = new Tensor('float32', input, [1, 3, paddedHeight, paddedWidth]);
-  const result = await session.run({ input: tensor });
+  let result: InferenceSession.ReturnType;
+  try {
+    result = await session.run({ input: tensor });
+  } finally {
+    tensor.dispose();
+  }
   const loc = result.loc.data as Float32Array;
   const conf = result.conf.data as Float32Array;
   const iou = result.iou.data as Float32Array;
@@ -87,6 +93,8 @@ export async function findYuNetFaces(frame: ImageData, session: InferenceSession
     }
   }
 
+  for (const output of Object.values(result)) output.dispose();
+
   const kept: Bounds[] = [];
   for (const { bounds } of candidates.sort((a, b) => b.score - a.score)) {
     if (kept.every(other => overlap(bounds, other) <= 0.3)) kept.push(bounds);
@@ -94,6 +102,6 @@ export async function findYuNetFaces(frame: ImageData, session: InferenceSession
   return kept;
 }
 
-export async function detectFaces(frame: ImageData) {
-  return findYuNetFaces(frame, await loadDetector());
+export async function detectFaces(frame: ImageData, mobile: boolean) {
+  return findYuNetFaces(frame, await loadDetector(mobile));
 }

@@ -49,3 +49,11 @@ describe('upscale limits', () => {
     expect(() => parseUpscale({ scale: 3, mode: 'photo', mobile: false })).toThrow('Choose a scale');
   });
 });
+
+it('limits the retained full-resolution stage on mobile and low-memory devices', async () => {
+  const { upscaleCacheBudget } = await import('../../lib/workers/upscale/cache-budget');
+  expect(upscaleCacheBudget(false, 8)).toBeGreaterThan(4000 * 4000 * 4);
+  expect(upscaleCacheBudget(false, 4)).toBe(32 * 2 ** 20);
+  expect(upscaleCacheBudget(true, 8)).toBe(32 * 2 ** 20);
+  expect(upscaleCacheBudget(true, 2)).toBe(16 * 2 ** 20);
+});

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import sharp from 'sharp';
-import { downloadResult, fixtureBytes, openImageWorkspace, pick, waitForImage } from './helpers';
+import { downloadResult, fixtureBytes, observeModelCalls, openImageWorkspace, pick, waitForFonts, waitForImage } from './helpers';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -9,6 +9,7 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   test.skip(testInfo.project.name !== 'desktop-chromium' || process.env.FILEKIT_BG_E2E !== '1',
     'Real Lite model is staged for Chromium with FILEKIT_BG_E2E=1');
   test.setTimeout(300_000);
+  const calls = await observeModelCalls(page, 'makeMask');
   const origin = new URL(baseURL!).origin;
   const violations: string[] = [];
   const modelPath = 'public/bg-model-source/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/onnx/model_fp16.onnx.json';
@@ -59,7 +60,9 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   await button('Convert').click();
   await page.getByRole('radio', { name: 'PNG', exact: true }).check();
   await button('Apply convert').click();
+  expect(await calls()).toBe(2);
   const transparent = await downloadResult(page, 'Export image');
+  expect(await calls()).toBe(2);
   const photo = sharp(transparent.bytes);
   const metadata = await photo.metadata();
   expect(metadata).toMatchObject({ format: 'png', hasAlpha: true });
@@ -71,9 +74,11 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   await page.getByLabel('Background color').fill('#104e32');
   await button('Apply remove background').click();
   const colored = await downloadResult(page, 'Export image');
+  expect(await calls()).toBe(2);
   const pixel = await sharp(colored.bytes).extract({ left: 0, top: 0, width: 1, height: 1 }).raw().toBuffer();
   expect([...pixel].slice(0, 3)).toEqual([16, 78, 50]);
   expect(chunks).toBe(firstDownloadCount);
+  await waitForFonts(page);
   await testInfo.attach('background-solid', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
 
   await button('Undo').click();

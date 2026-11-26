@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, ImagePlus, Plus, Redo2, Undo2, X } from 'lucide-react';
 import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import { activeCommands, createEditStack, recordEdit, redo, undo, type EditStack } from '../../lib/core/edit-stack';
 import { imageTools } from '../../lib/tools/image';
+import type { ImageAIResults } from '../../lib/tools/image/ai-results';
 import { outputFormats } from '../../lib/tools/image/formats';
 import { ImageWorkerClient } from '../../lib/workers/image-client';
 import type { ImageExport, ImageInfo, ImageProgress, PreviewResult } from '../../lib/workers/image/types';
@@ -88,6 +89,8 @@ export function ImageWorkspace() {
   const selectedInfo = selected?.info;
   const activeId = selected?.id;
   const activeStack = selected?.stack;
+  const aiResults = useMemo<ImageAIResults>(() => ({}), [activeId]);
+  const editKey = useMemo(() => activeStack ? JSON.stringify(activeCommands(activeStack)) : '', [activeStack]);
   const renderDraft = useCallback(async (command: EditCommand) => {
     if (activeId && activeStack) {
       return client.renderDraft({ id: activeId, commands: [...activeCommands(activeStack), command] });
@@ -422,7 +425,7 @@ export function ImageWorkspace() {
             {selected && selectedInfo && (
               <ToolPanel revision={selected.stack}
                 registry={imageTools} context={{
-                  original: selected.stack.original, releaseImageMemory: () => client.releaseFullPreview(),
+                  original: selected.stack.original, editKey, aiResults, releaseImageMemory: () => client.releaseFullPreview(),
                   backgroundColor: selectedInfo.backgroundColor,
                   hasAlpha: selectedInfo.hasAlpha, size: selectedInfo, previewUrl, previewBlob: shownPreview?.result.blob,
                   previewTarget, renderDraft, preparePreview, upscale: selectedInfo.upscale, disabled: toolsDisabled,

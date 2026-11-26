@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
-import { downloadResult, fileRow, openImageWorkspace, pick, waitForImage } from './helpers';
+import { downloadResult, fileRow, openImageWorkspace, pick, waitForFonts, waitForImage } from './helpers';
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 const dimensions = (page: Page) => page.locator('.preview-footer > span');
@@ -58,6 +58,7 @@ test('upscales after a crop, replays history, and exports exact dimensions', asy
   expect(weightsRequests).toHaveLength(1);
 
   const tools = page.getByRole('region', { name: 'Tools' });
+  await waitForFonts(page);
   await testInfo.attach('upscale-controls', { body: await tools.screenshot(), contentType: 'image/png' });
   if (['desktop-chromium', 'android-chromium'].includes(testInfo.project.name)) {
     await expect(tools).toHaveScreenshot('upscale-controls.png', { maxDiffPixelRatio: 0.04 });
