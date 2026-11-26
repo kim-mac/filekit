@@ -11,7 +11,8 @@ export default defineConfig({
   snapshotPathTemplate: '{testDir}/../screenshots/{projectName}/{arg}{ext}',
   reporter: 'list',
   forbidOnly: Boolean(process.env.CI),
-  workers: 2,
+  // Concurrent software-rendered WebKit sessions contend for CPU and skew frame timings.
+  workers: 1,
   use: {
     baseURL,
     trace: 'retain-on-failure',

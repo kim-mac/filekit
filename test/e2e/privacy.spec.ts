@@ -5,6 +5,8 @@ import { downloadResult, fileRow, fixtureBytes, pick, waitForImage, toolTab } fr
 test.use({ serviceWorkers: 'block' });
 
 test('lazy codec, face detection, and upscale assets stay same origin and files never enter HTTP requests', async ({ page, context, baseURL }) => {
+  // This flow cold-loads the GIF encoder, YuNet, and an Upscale model on the same page.
+  test.setTimeout(60_000);
   const origin = new URL(baseURL!).origin;
   const fixtures = ['oriented.jpg', 'reference.heic', 'animated.gif', 'transparent.png', 'reference.webp', 'reference.avif', 'bg/person-urban.jpg'];
   const markers = [...fixtures.map((name) => name.split('/').at(-1)!), 'filekit-private-fixture-marker'];

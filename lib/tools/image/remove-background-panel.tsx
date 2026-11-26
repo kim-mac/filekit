@@ -6,7 +6,7 @@ import type { ImageToolContext } from './context';
 const backgroundModes = [
   { value: 'transparent', label: 'Transparent', detail: 'Leave the area behind the subject clear.' },
   { value: 'solid', label: 'Color', detail: 'Replace the background with one color.' },
-  { value: 'blur', label: 'Blur background (portrait effect)', detail: 'Soften the original background and keep the subject sharp.' },
+  { value: 'blur', label: 'Blur background (portrait effect)', detail: 'Soften the background and keep the subject sharp.' },
 ] as const;
 
 export default function RemoveBackgroundOptionsPanel({ value, onChange, context }: {
