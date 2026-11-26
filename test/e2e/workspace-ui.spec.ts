@@ -141,7 +141,7 @@ test('compares an edited image with matching framing and captures each workspace
   await expect(page.getByRole('region', { name: 'Tools' }).getByLabel('Fill transparent areas with')).toHaveValue('#ffffff');
   await capture('convert');
   await toolTab(page, 'Remove background').click();
-  await expect(page.getByRole('radio', { name: 'Blur background (portrait effect)' })).toHaveAccessibleDescription(/keep the subject sharp/);
+  await expect(page.getByRole('radio', { name: 'Blur background (portrait effect)' })).toHaveAccessibleDescription('Keep the subject sharp. Blur the rest.');
   await expect(page.getByText('JPG fill color')).toHaveCount(0);
   await capture('remove-background');
 });
