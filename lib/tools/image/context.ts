@@ -1,5 +1,6 @@
 import type { EditCommand, ToolProgress } from '../../core/contracts';
 import type { ImageAIResults } from './ai-results';
+import type { InputFormat } from './formats';
 import type { Size } from './geometry';
 import type { UpscaleQuality } from './upscale-options';
 
@@ -8,7 +9,7 @@ export interface ImageToolContext {
   readonly editKey: string;
   readonly aiResults: ImageAIResults;
   readonly releaseImageMemory: () => Promise<void> | undefined;
-  readonly backgroundColor?: string;
+  readonly originalFormat: InputFormat;
   readonly hasAlpha: boolean;
   readonly size: Size;
   readonly previewUrl?: string;

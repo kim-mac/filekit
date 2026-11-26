@@ -1,3 +1,7 @@
+import { Button } from '../../../components/ui/button';
+import { ChoiceGroup } from '../../../components/ui/choice-group';
+import { Slider } from '../../../components/ui/slider';
+import { Toggle } from '../../../components/ui/toggle';
 import { wrap, type Remote } from 'comlink';
 import { Eraser, Focus, Pencil, RectangleHorizontal, ScanFace, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -180,59 +184,49 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
         <legend>Region tool</legend>
         <div className="blur-modes">
           {modes.map(({ id, label, Icon }) => (
-            <button key={id} className="button secondary" type="button" aria-pressed={mode === id}
-              onClick={() => {
+            <Toggle key={id} variant="outline" pressed={mode === id} disabled={disabled}
+              onPressedChange={() => {
                 setMode(id);
                 if (id === 'brush' || id === 'eraser') setSelected(undefined);
               }}>
-              <Icon size={16} aria-hidden />{label}
-            </button>
+              <Icon aria-hidden />{label}
+            </Toggle>
           ))}
         </div>
       </fieldset>
       {(mode === 'brush' || mode === 'eraser') && (
-        <label className="quality-field">
+        <div className="quality-field">
           <span>Brush size <output>{brushSize}%</output></span>
-          <input aria-label="Brush size" aria-keyshortcuts="[ ]" type="range" min={1} max={50} value={brushSize}
-            onChange={event => setBrushSize(event.currentTarget.valueAsNumber)} />
-        </label>
+          <Slider className="h-9" aria-label="Brush size" aria-keyshortcuts="[ ]" min={1} max={50} value={[brushSize]}
+            onValueChange={([size]) => setBrushSize(size)} disabled={disabled} />
+        </div>
       )}
       <fieldset>
         <legend>Effect</legend>
-        <div className="format-options blur-effects">
-          {(['gaussian', 'pixelate'] as const).map(effect => (
-            <label key={effect}>
-              <input type="radio" name="blur-effect" checked={value.effect === effect}
-                onChange={() => onChange({ ...value, effect })} />
-              <span>{effect === 'gaussian' ? 'Gaussian blur' : 'Pixelate'}</span>
-            </label>
-          ))}
-        </div>
+        <ChoiceGroup label="Effect" className="blur-effects"
+          items={[{ value: 'gaussian', label: 'Gaussian blur' }, { value: 'pixelate', label: 'Pixelate' }]}
+          value={value.effect} disabled={disabled} onChange={effect => onChange({ ...value, effect })} />
       </fieldset>
-      <label className="quality-field">
+      <div className="quality-field">
         <span>{value.effect === 'gaussian' ? 'Strength' : 'Block size'} <output>{value.effect === 'gaussian' ? value.strength : value.blockSize}</output></span>
-        <input
-          aria-label={value.effect === 'gaussian' ? 'Strength' : 'Block size'}
-          type="range" min={value.effect === 'gaussian' ? 1 : 2} max={100}
-          value={value.effect === 'gaussian' ? value.strength : value.blockSize}
-          onChange={event => {
-            const amount = event.currentTarget.valueAsNumber;
-            onChange(value.effect === 'gaussian' ? { ...value, strength: amount } : { ...value, blockSize: amount });
-          }}
+        <Slider className="h-9" aria-label={value.effect === 'gaussian' ? 'Strength' : 'Block size'}
+          min={value.effect === 'gaussian' ? 1 : 2} max={100}
+          value={[value.effect === 'gaussian' ? value.strength : value.blockSize]} disabled={disabled}
+          onValueChange={([amount]) => onChange(value.effect === 'gaussian' ? { ...value, strength: amount } : { ...value, blockSize: amount })}
         />
-      </label>
+      </div>
       <label className="blur-invert">
         <input type="checkbox" checked={value.inverted} onChange={event => onChange({ ...value, inverted: event.currentTarget.checked })} />
         Invert selected regions
       </label>
       <div className="blur-actions">
-        <button className="button secondary" type="button" disabled={finding || !previewBlob} onClick={() => void findFaces()}>
+        <Button variant="outline" type="button" disabled={finding || !previewBlob} onClick={() => void findFaces()}>
           <ScanFace size={17} aria-hidden />Detect faces
-        </button>
+        </Button>
         {selectedShape && (
-          <button className="button secondary" aria-keyshortcuts="Delete" type="button" onClick={deleteShape}>
+          <Button variant="outline" aria-keyshortcuts="Delete" type="button" onClick={deleteShape}>
             <Trash2 size={17} aria-hidden />Delete shape
-          </button>
+          </Button>
         )}
       </div>
       {faceStatus && <p className="section-note" role="status">{faceStatus}</p>}

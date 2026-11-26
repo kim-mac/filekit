@@ -3,7 +3,7 @@ import type { EditCommand } from '../../core/contracts';
 import { sameBackground, type BackgroundOptions } from '../../tools/image/background-options';
 import { compositeBackground } from './background';
 import { imageTools } from '../../tools/image';
-import { defaultConvertOptions, defaultOutput, outputName, type ConvertOptions, type ImageState } from '../../tools/image/formats';
+import { defaultConvertOptions, keepOriginalOptions, outputFormats, outputName, resolveOutput, type ImageState } from '../../tools/image/formats';
 import { fullGeometry, geometrySize, sameGeometry, scaleGeometry, type ImageGeometry, type Size } from '../../tools/image/geometry';
 import { parseUpscale, type UpscaleQuality } from '../../tools/image/upscale-options';
 import { upscaleCacheBudget } from '../upscale/cache-budget';
@@ -11,9 +11,9 @@ import models from '../upscale/models.json';
 import { mapSource, projectMatte, sourceMapping, type SourceMapping } from '../upscale/matte';
 import { applyRegionBlur } from './blur';
 import { decodeImage, encodeImage } from './codecs';
-import { flatten, hasTransparency, previewMaxEdge, renderGeometry, resizePreview } from './pixels';
+import { hasTransparency, previewMaxEdge, renderGeometry, resizePreview } from './pixels';
 import type {
-  FileFailure, ImageExport, ImageProgress, ImageRequest, ImageStage, PreviewRequest, PreviewResult, ProgressCallback, ZipResult,
+  ComparisonRequest, FileFailure, ImageExport, ImageProgress, ImageRequest, ImageStage, PreviewRequest, PreviewResult, ProgressCallback, ZipResult,
 } from './types';
 
 type ReportStage = (stage: ImageStage, detail?: string, tiles?: ImageProgress['tiles']) => void;
@@ -28,7 +28,7 @@ interface PreviewSource {
   readonly base: ImageData;
   readonly hasAlpha: boolean;
   fullFrame?: ImageData;
-  rendered?: { geometry: ImageGeometry; background?: string; edit?: BackgroundOptions; blurKey: string; blob: Blob; hasAlpha: boolean };
+  rendered?: { geometry: ImageGeometry; edit?: BackgroundOptions; blurKey: string; blob: Blob; hasAlpha: boolean };
 }
 
 interface UpscaledRaster {
@@ -81,7 +81,7 @@ async function previewSource(request: PreviewRequest, report: ReportStage): Prom
     hasAlpha: hasTransparency(base),
     fullFrame: cache ? frame : undefined,
   };
-  if (cache) activePreview = source;
+  if (cache && activeFile === id) activePreview = source;
   return source;
 }
 
@@ -113,28 +113,33 @@ async function encodePreview(frame: ImageData, hasAlpha: boolean, sourceFormat: 
 }
 
 async function previewState(source: PreviewSource, commands: ImageRequest['commands']) {
-  const state = await imageTools.replay({
-    geometry: fullGeometry(source), output: defaultOutput(source.format),
+  return imageTools.replay({
+    geometry: fullGeometry(source), output: keepOriginalOptions,
   }, commands);
-  return { ...state, output: outputForBackground(state.output, state.backgroundEdit, commands) };
 }
 
 async function previewRaster(source: PreviewSource, state: ImageState) {
-  const { geometry, backgroundEdit, blurEdits, output } = state;
+  const { geometry, backgroundEdit, blurEdits } = state;
   if (blurEdits) source.fullFrame = undefined;
   const maxEdge = backgroundEdit?.mask?.outputMaxEdge;
   const base = maxEdge ? resizePreview(source.base, maxEdge) : source.base;
   const composed = backgroundEdit || blurEdits
     ? await applyRasterEdits(new ImageData(base.data.slice(), base.width, base.height), source, state)
     : base;
-  let frame = renderGeometry(composed, scaleGeometry(geometry, source, base));
+  const frame = renderGeometry(composed, scaleGeometry(geometry, source, base));
   const hasAlpha = Boolean(source.hasAlpha || backgroundEdit) && hasTransparency(frame);
-  const background = hasAlpha && output.format === 'jpeg' ? output.background : undefined;
-  if (background) {
-    if (frame === source.base) frame = new ImageData(base.data.slice(), base.width, base.height);
-    flatten(frame, background);
-  }
-  return { frame, hasAlpha, background };
+  return { frame, hasAlpha };
+}
+
+function makeThumbnail(frame: ImageData) {
+  return encodeImage(resizePreview(frame, 144), defaultConvertOptions);
+}
+
+export async function renderComparison(request: ComparisonRequest) {
+  const source = await previewSource({ ...request, commands: [], cache: activeFile === request.id }, () => {});
+  const { base, format } = source;
+  const frame = renderGeometry(base, scaleGeometry(request.mapping, { width: 1, height: 1 }, base));
+  return encodePreview(frame, source.hasAlpha, format);
 }
 
 export async function renderDraft({ id, commands }: Pick<ImageRequest, 'id' | 'commands'>) {
@@ -142,7 +147,7 @@ export async function renderDraft({ id, commands }: Pick<ImageRequest, 'id' | 'c
   if (upscale) {
     const cached = activeUpscaled;
     if (activeFile !== id || cached?.key !== upscale.key) return;
-    const { frame } = await finishUpscale(cached.raster, upscale, true, commands);
+    const { frame } = await finishUpscale(cached.raster, upscale, true);
     if (activeUpscaled !== cached) return;
     return frame === cached.raster.frame ? new ImageData(frame.data.slice(), frame.width, frame.height) : frame;
   }
@@ -162,34 +167,31 @@ export async function renderPreview(request: PreviewRequest, progress: ProgressC
   const source = await previewSource(request, report);
   report('Rendering preview');
   const state = await previewState(source, request.commands);
-  const { geometry, output, backgroundEdit, blurEdits } = state;
+  const { geometry, output: conversion, backgroundEdit, blurEdits } = state;
   const { format } = source;
   const maxEdge = backgroundEdit?.mask?.outputMaxEdge;
   const outputGeometry = maxEdge ? scaleGeometry(geometry, source, cappedSize(source, maxEdge)) : geometry;
   const blurKey = blurEdits ? JSON.stringify([state.backgroundAfterBlur, blurEdits]) : '';
   let rendered = source.rendered;
-  const expectedBackground = rendered?.hasAlpha && output.format === 'jpeg' ? output.background : undefined;
-  if (!rendered || !sameGeometry(rendered.geometry, geometry) || rendered.background !== expectedBackground ||
+  let thumbnail: Blob | undefined;
+  if (!rendered || !sameGeometry(rendered.geometry, geometry) ||
     !sameBackground(rendered.edit, backgroundEdit) || rendered.blurKey !== blurKey) {
-    const { frame, hasAlpha, background } = await previewRaster(source, state);
-    const blob = await encodePreview(frame, hasAlpha && !background, format);
-    rendered = { geometry, edit: backgroundEdit, blurKey, background, hasAlpha, blob };
+    const { frame, hasAlpha } = await previewRaster(source, state);
+    const blob = await encodePreview(frame, hasAlpha, format);
+    if (request.thumbnail) thumbnail = await makeThumbnail(frame);
+    rendered = { geometry, edit: backgroundEdit, blurKey, hasAlpha, blob };
     source.rendered = rendered;
   }
-  return { blob: rendered.blob, info: { ...geometrySize(outputGeometry), hasAlpha: rendered.hasAlpha, format, output,
-    backgroundColor: backgroundEdit?.color } };
+  return {
+    blob: rendered.blob, thumbnail,
+    mapping: mapSource(sourceMapping, source, geometry),
+    info: { ...geometrySize(outputGeometry), hasAlpha: rendered.hasAlpha, format, conversion, output: resolveOutput(format, conversion) },
+  };
 }
 
 function cappedSize(frame: { width: number; height: number }, edge: number) {
   const scale = Math.min(1, edge / Math.max(frame.width, frame.height));
   return { width: Math.max(1, Math.floor(frame.width * scale)), height: Math.max(1, Math.floor(frame.height * scale)) };
-}
-
-function outputForBackground(output: ConvertOptions, edit: BackgroundOptions | undefined, commands: ImageRequest['commands']): ConvertOptions {
-  if (!edit) return output;
-  const explicitFormat = commands.some(command => command.toolId === 'convert');
-  const format = edit.mode === 'transparent' && output.format === 'jpeg' && !explicitFormat ? 'png' : output.format;
-  return { ...output, format, background: edit.color };
 }
 
 async function applyRasterEdits(frame: ImageData, original: Size, state: ImageState) {
@@ -221,7 +223,7 @@ function upscaleProgram(commands: readonly EditCommand[]) {
   const upscales = prefix.filter(({ toolId }) => toolId === 'upscale').map(({ options }) => parseUpscale(options));
   const modelIds = upscales.map(({ mode }) => models[mode === 'photo' ? 'general' : 'anime'].sha256);
   const key = JSON.stringify([maxEdge, prefix, modelIds]);
-  return { prefix, suffix, background, conversion, maxEdge, key, mobile: upscales.at(-1)!.mobile };
+  return { prefix, suffix, conversion, maxEdge, key, mobile: upscales.at(-1)!.mobile };
 }
 
 type UpscaleProgram = NonNullable<ReturnType<typeof upscaleProgram>>;
@@ -247,7 +249,7 @@ async function upscalePrefix(
   let { frame, format } = await decodeOriginal(request.original, report);
   let mapping = sourceMapping;
   let quality: UpscaleQuality | undefined;
-  let state: ImageState = { geometry: fullGeometry(frame), output: defaultOutput(format) };
+  let state: ImageState = { geometry: fullGeometry(frame), output: keepOriginalOptions };
   const { runUpscale } = await import('../upscale/inference');
   for (const command of program.prefix) {
     state = await imageTools.get(command.toolId).apply(state, command.options);
@@ -269,27 +271,23 @@ async function upscalePrefix(
 }
 
 async function finishUpscale(
-  raster: UpscaledRaster, program: UpscaleProgram, preview: boolean, commands: ImageRequest['commands'],
+  raster: UpscaledRaster, program: UpscaleProgram, preview: boolean,
   cached = preview,
 ) {
   let state = await imageTools.replay({
-    geometry: fullGeometry(raster.size), output: defaultOutput(raster.format),
+    geometry: fullGeometry(raster.size), output: keepOriginalOptions,
   }, program.suffix);
   if (program.conversion) state = await imageTools.get('convert').apply(state, program.conversion.options);
-  const background = program.background ? program.background.options as BackgroundOptions : undefined;
-  const output = outputForBackground(state.output, background, commands);
+  const output = resolveOutput(raster.format, state.output);
   const mode = cached ? 'preserve' : output.format === 'avif' ? 'orient' : 'compact';
   let frame = await rasterStage(raster.frame, raster.size, state, raster.mapping, mode);
   const hasAlpha = preview && hasTransparency(frame);
   // Geometry and raster effects use copies when a retained stage is shared.
-  // JPEG flattening can also mutate its input, so protect an alpha cache hit.
-  if (output.format === 'jpeg') {
-    if (cached && frame === raster.frame && (preview ? hasAlpha : hasTransparency(frame))) {
-      frame = new ImageData(frame.data.slice(), frame.width, frame.height);
-    }
-    if (hasAlpha) flatten(frame, output.background);
+  // An opaque encoder may flatten its input, so protect a retained alpha raster.
+  if (!preview && !outputFormats[output.format].alpha && cached && frame === raster.frame && hasTransparency(frame)) {
+    frame = new ImageData(frame.data.slice(), frame.width, frame.height);
   }
-  return { frame, output, hasAlpha, geometry: state.geometry, backgroundColor: background?.color };
+  return { frame, output, hasAlpha, geometry: state.geometry, conversion: state.output };
 }
 
 async function renderUpscaledPreview(request: PreviewRequest, program: UpscaleProgram, report: ReportStage): Promise<PreviewResult> {
@@ -312,9 +310,13 @@ async function renderUpscaledPreview(request: PreviewRequest, program: UpscalePr
     }
   }
   report('Rendering preview');
-  const { frame, output, hasAlpha, geometry, backgroundColor } = await finishUpscale(raster, program, true, request.commands);
-  const blob = await encodePreview(frame, hasAlpha && output.format !== 'jpeg', raster.format);
-  return { blob, info: { ...geometrySize(geometry), hasAlpha, format: raster.format, output, backgroundColor, upscale: raster.quality } };
+  const { frame, output, hasAlpha, geometry, conversion } = await finishUpscale(raster, program, true);
+  const blob = await encodePreview(frame, hasAlpha, raster.format);
+  return {
+    blob, thumbnail: request.thumbnail ? await makeThumbnail(frame) : undefined,
+    mapping: mapSource(raster.mapping, raster.size, geometry),
+    info: { ...geometrySize(geometry), hasAlpha, format: raster.format, output, conversion, upscale: raster.quality },
+  };
 }
 
 async function prepareExport(request: ImageRequest, report: ReportStage) {
@@ -322,7 +324,7 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
   if (upscale) {
     const cached = activeFile === request.id && activeUpscaled?.key === upscale.key ? activeUpscaled.full : undefined;
     const raster = cached ?? await upscalePrefix(request, upscale, report);
-    return finishUpscale(raster, upscale, false, request.commands, Boolean(cached));
+    return finishUpscale(raster, upscale, false, Boolean(cached));
   }
   releaseFullPreview();
   // The matte is stored in EXIF-normalized source coordinates. Keep the
@@ -330,10 +332,10 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
   const hasBackground = request.commands.some(command => command.toolId === 'remove-background');
   const { frame: original, format, orientation } = await decodeOriginal(request.original, report, hasBackground);
   const state = await imageTools.replay({
-    geometry: fullGeometry(original, hasBackground ? 1 : orientation), output: defaultOutput(format),
+    geometry: fullGeometry(original, hasBackground ? 1 : orientation), output: keepOriginalOptions,
   }, request.commands);
   const { geometry, output: conversion, backgroundEdit, blurEdits } = state;
-  const output = outputForBackground(conversion, backgroundEdit, request.commands);
+  const output = resolveOutput(format, conversion);
   // The AVIF wrapper reads the entire backing buffer, so crops need a dense raster.
   const mode = output.format === 'avif' ? 'orient' : 'compact';
   if (!backgroundEdit && !blurEdits) return { frame: renderGeometry(original, geometry, mode), output };

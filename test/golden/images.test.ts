@@ -241,7 +241,7 @@ describe('background removal compositing', () => {
     const secondPixels = (await decodeImage(later.blob)).frame;
     expect([firstPixels.width, firstPixels.height]).toEqual([72, 64]);
     expect([...firstPixels.data]).toEqual([...secondPixels.data]);
-    if (format === 'jpeg') near(rgba(firstPixels, 50, 1), [16, 78, 50, 255], 17);
+    if (format === 'jpeg') near(rgba(firstPixels, 50, 1), [255, 255, 255, 255], 17);
     else expect(rgba(firstPixels, 50, 1)[3]).toBe(0);
   });
 });
@@ -256,10 +256,10 @@ it('uses original desktop dimensions and the disclosed iOS output cap after rota
     } },
   });
   const preview = await renderPreview({ id: 'full-bg', original, commands: [crop(6), createEdit()], maxEdge: 120 }, silent);
-  expect(preview.info).toMatchObject({ width: 4000, height: 6000, output: { format: 'png' } });
+  expect(preview.info).toMatchObject({ width: 4000, height: 6000, hasAlpha: true, output: { format: 'jpeg' } });
   const request = { id: 'phone-bg', original, commands: [createEdit(1280), crop(6)] };
   const bounded = await renderPreview({ ...request, maxEdge: 120 }, silent);
-  expect(bounded.info).toMatchObject({ width: 853, height: 1280, output: { format: 'png' } });
+  expect(bounded.info).toMatchObject({ width: 853, height: 1280, hasAlpha: true, output: { format: 'jpeg' } });
   const result = await exportImage(request, silent);
   const { frame } = await decodeImage(result.blob);
   expect([frame.width, frame.height]).toEqual([853, 1280]);

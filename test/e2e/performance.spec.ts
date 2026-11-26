@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { performance as timer } from 'node:perf_hooks';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import sharp from 'sharp';
-import { openImageWorkspace, pick, savedLink } from './helpers';
+import { openImageWorkspace, pick, savedLink, toolTab, setSlider } from './helpers';
 
 async function observePreview(page: Page, trigger: 'change' | 'click') {
   await page.evaluate((trigger) => {
@@ -60,11 +60,11 @@ test('times first and subsequent previews and full-resolution export for a 6000Ã
 
   const subsequentPreviewMs = [];
   for (const quality of [80, 75, 70]) {
-    await page.getByRole('slider', { name: 'Quality' }).fill(String(quality));
+    await setSlider(page.getByRole('slider', { name: 'Quality' }), quality);
     await observePreview(page, 'click');
     await page.getByRole('button', { name: 'Apply convert' }).click();
     subsequentPreviewMs.push(await previewTiming(page));
-    await expect(page.getByText(`JPG Â· Quality ${quality}%`)).toBeVisible();
+    await expect(page.getByText(`JPG (JPEG) Â· Quality ${quality}%`)).toBeVisible();
   }
 
   const exportStart = timer.now();
@@ -81,7 +81,7 @@ test('times first and subsequent previews and full-resolution export for a 6000Ã
   expect(metadata.exif).toBeUndefined();
   const unrotatedPeakKiB = await rendererPeakKiB(browser, browserName);
 
-  await page.getByRole('button', { name: 'Crop', exact: true }).click();
+  await toolTab(page, 'Crop').click();
   await page.getByRole('button', { name: 'Rotate right', exact: true }).click();
   await observePreview(page, 'click');
   await page.getByRole('button', { name: 'Apply crop' }).click();

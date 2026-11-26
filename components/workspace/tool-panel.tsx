@@ -1,6 +1,9 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import type { CategoryRegistry } from '../../lib/core/registry';
+import { Button } from '../ui/button';
+import { Progress } from '../ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 export function ToolPanel<State, Context>({
   registry, context, initialOptions, revision, onApply, onBusyChange, disabled,
@@ -64,43 +67,46 @@ export function ToolPanel<State, Context>({
   }
 
   return (
-    <div className="tool-panel">
-      <div className="tool-bar" role="group" aria-label="Available tools">
+    <Tabs className="tool-panel" value={activeId} activationMode="manual"
+      onValueChange={id => { setActiveId(id); setStatus(''); }}>
+      <TabsList className="tool-bar" aria-label="Available tools">
         {tools.map(({ id, name, icon: Icon }) => (
-          <button key={id} type="button" aria-pressed={activeId === id} onClick={() => { setActiveId(id); setStatus(''); }} disabled={disabled || busy}>
-            <Icon size={17} aria-hidden /> {name}
-          </button>
+          <TabsTrigger key={id} value={id} disabled={disabled || busy}>
+            <Icon aria-hidden /> {name}
+          </TabsTrigger>
         ))}
-      </div>
-      <form onSubmit={(event) => {
-        event.preventDefault();
-        void submit();
-      }}>
-        <fieldset className="tool-controls" disabled={disabled || busy}>
-          <Suspense fallback={<p role="status">Opening tool…</p>}>
-            <tool.OptionsPanel
-              value={options}
-              context={context}
-              onChange={(value) => setDraft({ revision, options: { ...drafts, [activeId]: value } })}
-            />
-          </Suspense>
-        </fieldset>
-        <button className="button secondary apply" type="submit" aria-disabled={applyDisabled}>Apply {tool.name.toLowerCase()}</button>
-        {progress && (
-          <div className="option-fields">
-            <p role="status">{progress.message}</p>
-            <progress aria-label="Tool progress" max={1} value={progress.progress} />
-            <button className="button secondary" type="button" onClick={() => {
-              activeJob.current?.abort();
-              activeJob.current = null;
-              onBusyChange(false);
-              setProgress(undefined);
-              setStatus('Edit canceled.');
-            }}>Cancel edit</button>
-          </div>
-        )}
-        {status && <p role="status">{status}</p>}
-      </form>
-    </div>
+      </TabsList>
+      <TabsContent value={activeId}>
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}>
+          <fieldset className="tool-controls" disabled={disabled || busy}>
+            <Suspense fallback={<p role="status">Opening tool…</p>}>
+              <tool.OptionsPanel
+                value={options}
+                context={context}
+                onChange={(value) => setDraft({ revision, options: { ...drafts, [activeId]: value } })}
+              />
+            </Suspense>
+          </fieldset>
+          <Button className="apply" type="submit" aria-disabled={applyDisabled}>Apply {tool.name.toLowerCase()}</Button>
+          {progress && (
+            <div className="option-fields">
+              <p role="status">{progress.message}</p>
+              <Progress aria-label="Tool progress" value={progress.progress === undefined ? null : progress.progress * 100} />
+              <Button variant="outline" type="button" onClick={() => {
+                activeJob.current?.abort();
+                activeJob.current = null;
+                onBusyChange(false);
+                setProgress(undefined);
+                setStatus('Edit canceled.');
+              }}>Cancel edit</Button>
+            </div>
+          )}
+          {status && <p role="status">{status}</p>}
+        </form>
+      </TabsContent>
+    </Tabs>
   );
 }

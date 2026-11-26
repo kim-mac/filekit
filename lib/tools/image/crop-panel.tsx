@@ -1,3 +1,5 @@
+import { Button } from '../../../components/ui/button';
+import { ChoiceGroup } from '../../../components/ui/choice-group';
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { FlipHorizontal2, FlipVertical2, RotateCcw, RotateCw } from 'lucide-react';
@@ -201,26 +203,21 @@ export default function CropOptionsPanel({ value, context, onChange }: PanelProp
       {context.previewTarget && createPortal(<CropEditor context={context} value={value} onChange={onChange} />, context.previewTarget)}
       <fieldset>
         <legend>Crop ratio</legend>
-        <div className="format-options crop-ratios">
-          {(Object.keys(cropPresets) as CropPreset[]).map((name) => (
-            <label key={name}>
-              <input type="radio" name="crop-ratio" checked={name === preset} onChange={() => {
-                const aspect = cropPresets[name];
-                onChange({ ...value, preset: name, bounds: aspect ? centeredCrop(orientedSize(context.size, orientation), aspect) : bounds });
-              }} />
-              <span>{name}</span>
-            </label>
-          ))}
-        </div>
+        <ChoiceGroup label="Crop ratio" className="crop-ratios"
+          items={(Object.keys(cropPresets) as CropPreset[]).map(name => ({ value: name, label: name }))}
+          value={preset} disabled={context.disabled} onChange={name => {
+            const aspect = cropPresets[name];
+            onChange({ ...value, preset: name, bounds: aspect ? centeredCrop(orientedSize(context.size, orientation), aspect) : bounds });
+          }} />
       </fieldset>
       <div className="transform-controls" role="group" aria-label="Rotate and flip">
         {transformControls.map(({ label, shortcut, orientation: next, Icon }) => (
-          <button
-            key={label} type="button" className="button secondary" aria-keyshortcuts={shortcut}
+          <Button
+            key={label} type="button" variant="outline" aria-keyshortcuts={shortcut}
             title={`${label} (${shortcut})`} onClick={() => transform(next)}
           >
-            <Icon size={16} aria-hidden /> {label}
-          </button>
+            <Icon aria-hidden /> {label}
+          </Button>
         ))}
       </div>
       <output className="crop-size" aria-label="Crop size">{dimension.width} × {dimension.height} px</output>

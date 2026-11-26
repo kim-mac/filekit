@@ -1,4 +1,4 @@
-import { outputFormats, type ConvertOptions } from '../../tools/image/formats';
+import { outputFormats, type ResolvedOutput } from '../../tools/image/formats';
 import { isOrientation } from '../../tools/image/geometry';
 import { detectFormat, firstWebpFrame, hasContainerOrientation } from './headers';
 import { flatten, orient } from './pixels';
@@ -58,7 +58,7 @@ export async function decodeImage(original: Blob, normalize = true) {
   return { frame: normalize ? orient(frame, orientation) : frame, format, orientation };
 }
 
-export async function encodeImage(frame: ImageData, options: ConvertOptions): Promise<Blob> {
+export async function encodeImage(frame: ImageData, options: ResolvedOutput): Promise<Blob> {
   const { format, quality, background } = options;
   let bytes: ArrayBuffer;
   switch (format) {
@@ -88,6 +88,13 @@ export async function encodeImage(frame: ImageData, options: ConvertOptions): Pr
       const { default: encode } = await import('@jsquash/avif/encode.js');
       bytes = await encode(frame, { quality, qualityAlpha: 100 });
       break;
+    }
+    case 'bmp':
+    case 'gif':
+    case 'tiff':
+    case 'ico': {
+      const { encodeExtended } = await import('./extended-codecs');
+      return encodeExtended(format === 'bmp' ? flatten(frame, background) : frame, { ...options, format });
     }
   }
   return new Blob([bytes], { type: outputFormats[format].mime });

@@ -1,6 +1,6 @@
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
-import { readFile, rm } from 'node:fs/promises';
+import { copyFile, readFile, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
@@ -72,3 +72,5 @@ await build({
     },
   }],
 });
+
+await copyFile(require.resolve('@imagemagick/magick-wasm/magick.wasm'), `${outdir}/magick.wasm`);

@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { performance as timer } from 'node:perf_hooks';
 import sharp from 'sharp';
-import { downloadResult, observeModelCalls, openImageWorkspace, pick, savedLink, waitForFonts, waitForImage } from './helpers';
+import { downloadResult, observeModelCalls, openImageWorkspace, pick, savedLink, waitForFonts, waitForImage, toolTab, setSlider } from './helpers';
 
 type Point = { x: number; y: number };
 type Input = { page: Page; editor: Locator; isMobile: boolean; browserName: string };
@@ -75,13 +75,13 @@ test('draws, erases, moves, resizes, deletes, and replays blur regions', async (
   await pick(page, 'oriented.png');
   await waitForImage(page, 'oriented.png');
   const original = await preview.getAttribute('src');
-  await action(button('Blur'));
+  await action(toolTab(page, 'Blur'));
   await expect(editor).toBeVisible();
   if (!isMobile) {
     await editor.press(']');
-    await expect(page.getByRole('slider', { name: 'Brush size' })).toHaveValue('13');
+    await expect(page.getByRole('slider', { name: 'Brush size' })).toHaveAttribute('aria-valuenow', '13');
     await editor.press('[');
-    await expect(page.getByRole('slider', { name: 'Brush size' })).toHaveValue('12');
+    await expect(page.getByRole('slider', { name: 'Brush size' })).toHaveAttribute('aria-valuenow', '12');
   }
   await draw([0.15, 0.26], [0.78, 0.26]);
   await expect(editor.locator('canvas')).toBeVisible();
@@ -121,7 +121,7 @@ test('draws, erases, moves, resizes, deletes, and replays blur regions', async (
   await expect(rectangle).toBeVisible();
 
   await action(page.getByRole('radio', { name: 'Pixelate', exact: true }));
-  await page.getByRole('slider', { name: 'Block size' }).fill('75');
+  await setSlider(page.getByRole('slider', { name: 'Block size' }), 75);
   await action(page.getByRole('checkbox', { name: 'Invert selected regions' }));
   await action(button('Apply blur'));
   await expect(preview).not.toHaveAttribute('src', original!);
@@ -155,7 +155,7 @@ test('adds adjustable regions with the local face detector', async ({ page, isMo
   await openImageWorkspace(page);
   await pick(page, 'bg/person-urban.jpg');
   await waitForImage(page, 'person-urban.jpg');
-  await action(button('Blur'));
+  await action(toolTab(page, 'Blur'));
   await action(button('Detect faces'));
   await expect(page.getByText('1 face detected.', { exact: true })).toBeVisible({ timeout: 15_000 });
   const face = page.getByRole('group', { name: 'Blur rectangle 1' });
@@ -186,8 +186,8 @@ test('times a full-image 6000×4000 Gaussian export at maximum strength', async 
   await openImageWorkspace(page);
   await pick(page, fixture);
   await waitForImage(page, fixture);
-  await page.getByRole('button', { name: 'Blur', exact: true }).click();
-  await page.getByRole('slider', { name: 'Strength' }).fill('100');
+  await toolTab(page, 'Blur').click();
+  await setSlider(page.getByRole('slider', { name: 'Strength' }), 100);
   await page.getByRole('checkbox', { name: 'Invert selected regions' }).check();
   const previewStart = timer.now();
   await page.getByRole('button', { name: 'Apply blur' }).click();

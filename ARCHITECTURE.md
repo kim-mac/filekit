@@ -11,7 +11,7 @@ app/                         App Router layouts and routes
   globals.css                Tailwind CSS and shared styles
 components/
   workspace/                 File list, preview, toolbar, history, and export
-  ui/                        Shared accessible controls
+  ui/                        shadcn/ui primitives and shared form controls
 lib/
   core/                      Tool contracts, category registry, edit history, and job types
   tools/
@@ -42,10 +42,13 @@ For background removal, capable desktop hardware uses full BiRefNet through bg0 
 ## Phase 1 workspace
 
 - The home page links the Images card to the workspace and marks PDF, Audio, and Video as **Coming soon**.
-- The shared workspace owns intake, selection, a large preview, tool controls, undo and redo, export, and job status. It accepts multiple files through drag and drop, the file picker, or paste. Validate and report errors per file so valid files from the same intake remain usable.
+- The interface uses local shadcn/ui source components with Tailwind v4 tokens and system light/dark color schemes. Inter, icons and component scripts are served from FileKit.
+- Desktop places Files directly below Preview and stacks Tools above Export at the side. Mobile orders Preview, Tools, Files and Export. The empty Preview opens the file picker and accepts drop or paste. After intake, a plus tile opens the picker and the whole workspace accepts drops. The horizontal strip uses bounded worker-generated Blob thumbnails and shows per-file status. Each ready file can download from its own edit history without changing the selection. Thumbnail actions appear on hover, on keyboard focus, and on touch.
+- Compare requests an original preview with the active crop and orientation composed in source coordinates. The divider uses the keyboard-accessible slider, and the Compare toggle alternates between the split and full edited image. The worker reuses the bounded original preview and resolves the same framing through Upscale without rerunning inference.
 - Accept JPG, PNG, WebP, AVIF, GIF, and HEIC. Use the first frame of animated input and decode HEIC with `libheif-js`. Read EXIF orientation on decode and apply it once to the preview or export geometry.
 - The Crop plugin provides a movable and resizable crop box with Pointer Events for mouse and touch. It offers free crop and 1:1, 4:5, 16:9, and 9:16 presets. Arrow keys move the focused box or resize the focused corner. In Crop, R and Shift+R rotate by 90°, H flips horizontally, and V flips vertically. Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo applied edits.
-- Export a single file or a ZIP of multiple results. Offer JPG, PNG, WebP, and AVIF. Use a quality slider where the format supports lossy encoding. Preserve transparency in formats that support it and make the JPG background behavior explicit when the input has alpha. Strip EXIF by default and state that in the export UI.
+- Export a single file or a ZIP of multiple results. Convert shows the decoded original format and defaults to Keep original format. HEIC input defaults to JPG. HEIC encoding is excluded because it is patent-encumbered and poorly supported in browsers. JPG, PNG, WebP, AVIF, static GIF, BMP, TIFF and ICO are available as output. ICO fits the image onto transparent squares and writes the selected 16, 32, 48, 64, 128 and 256 px entries into one file.
+- A quality slider is available for JPG, WebP and AVIF. JPG and BMP export uses a separate fill color, default white, when the edited raster contains transparency. The preview retains alpha. Remove background owns only the appearance of the edited raster. Strip source EXIF from all outputs.
 - Maintain per-file processing progress and actionable errors for unsupported, corrupt, canceled, or failed operations. Announce status changes to assistive technology and preserve focus around editing and export controls.
 
 ## Tool contract and registry
@@ -92,7 +95,7 @@ interface EditStack {
 
 Store an immutable original and a separate command history per file. Render the active prefix `commands.slice(0, cursor)`. Undo and redo move the cursor within the history bounds. Applying a new command after undo truncates the redo branch. Store crop bounds as normalized coordinates in the oriented frame at that point in the history. The worker rounds crop edges in full-resolution coordinates, composes the edit history, and projects the result onto the preview base. The preview displays the full-resolution output dimensions.
 
-Cache the selected file’s orientation-normalized frame and an area-averaged preview base with a maximum edge of 2,048 px (at most 4,194,304 canvas pixels). Preview commands render from the base, and edits that leave the image and JPG background unchanged reuse the encoded preview. Encode large JPG previews at 95% quality when OffscreenCanvas is available. Evict the cache on selection change. Before validating another file or exporting, release the cached full-size raster and keep the selected preview base. Export materializes full-resolution edits from the original or a retained full-resolution AI stage derived from that original. Copy no source EXIF into the output. Use the relevant `@jsquash` WASM decoders and encoders on raw ImageData in the worker. Reserve canvas and OffscreenCanvas for previews. To stay below the iOS Safari canvas limit of approximately 16.7 MP, never send full-resolution images above 16,000,000 pixels through canvas. Use `fflate` for ZIP generation and feed finished files to the archive one at a time.
+Cache the selected file’s orientation-normalized frame and an area-averaged preview base with a maximum edge of 2,048 px (at most 4,194,304 canvas pixels). Preview commands render from the base, and format, quality and export fill changes reuse the encoded raster preview. Encode large JPG previews at 95% quality when OffscreenCanvas is available. Evict the cache on selection change. Before validating another file or exporting, release the cached full-size raster and keep the selected preview base. Export materializes full-resolution edits from the original or a retained full-resolution AI stage derived from that original. Copy no source EXIF into the output. Use the relevant `@jsquash` WASM codecs on raw ImageData in the worker. GIF decode uses the Squoosh GIF codec. The same-origin ImageMagick WASM codec (14.77 MiB) loads on first GIF, BMP, TIFF or ICO export. It encodes GIF, BMP, TIFF and the PNG entries stored in ICO. Reserve canvas and OffscreenCanvas for previews. To stay below the iOS Safari canvas limit of approximately 16.7 MP, never send full-resolution images above 16,000,000 pixels through canvas. Use `fflate` for ZIP generation and feed finished files to the archive one at a time.
 
 ## Worker setup and privacy
 
@@ -100,6 +103,7 @@ Cache the selected file’s orientation-normalized frame and an area-averaged pr
 interface ImageWorkerApi {
   retainPreview(id: string): void;
   renderPreview(request: PreviewRequest, onProgress: ProgressCallback): Promise<PreviewResult>;
+  renderComparison(request: ComparisonRequest): Promise<Blob>;
   exportImage(request: ImageRequest, onProgress: ProgressCallback): Promise<ImageExport>;
   exportZip(request: readonly ImageRequest[], onProgress: ProgressCallback): Promise<ZipResult>;
   // The client cancels by terminating the worker and settling the active job.

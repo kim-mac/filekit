@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
-import { downloadResult, fileRow, openImageWorkspace, pick, waitForFonts, waitForImage } from './helpers';
+import { downloadResult, fileRow, openImageWorkspace, pick, waitForFonts, waitForImage, toolTab } from './helpers';
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 const dimensions = (page: Page) => page.locator('.preview-footer > span');
@@ -31,12 +31,12 @@ test('upscales after a crop, replays history, and exports exact dimensions', asy
   await openImageWorkspace(page);
   await pick(page, 'oriented.png');
   await waitForImage(page, 'oriented.png');
-  await button(page, 'Crop').click();
+  await toolTab(page, 'Crop').click();
   await page.getByRole('radio', { name: '4:5', exact: true }).check();
   await button(page, 'Rotate right').click();
   await button(page, 'Apply crop').click();
   await expect(dimensions(page)).toHaveText('80 × 64 px');
-  await button(page, 'Upscale').click();
+  await toolTab(page, 'Upscale').click();
   if (!desktop) await page.getByRole('radio', { name: 'Art/Text', exact: true }).check();
   if (desktop) await page.getByRole('radio', { name: '4×', exact: true }).check();
   const scale = desktop ? 4 : 2;
@@ -72,7 +72,7 @@ test('blocks over-limit output before requesting a model', async ({ page, contex
   const height = isMobile ? 1001 : 2001;
   const width = isMobile ? 1000 : 2000;
   await pickGenerated(page, width, height);
-  await button(page, 'Upscale').click();
+  await toolTab(page, 'Upscale').click();
   await page.getByRole('radio', { name: '4×', exact: true }).check();
   await expect(page.getByText(`Result ${(width * 4).toLocaleString('en-US')} × ${(height * 4).toLocaleString('en-US')} px`)).toBeVisible();
   await expect(page.getByText(isMobile ? /supports up to 16 MP/ : /supports up to 64 MP/)).toBeVisible();
@@ -89,13 +89,13 @@ test('cancels tile inference and reuses verified chunks across workers', async (
   await openImageWorkspace(page);
   await pick(page, 'oriented.png');
   await waitForImage(page, 'oriented.png');
-  await button(page, 'Upscale').click();
+  await toolTab(page, 'Upscale').click();
   await button(page, 'Apply upscale').click();
   await expect(dimensions(page)).toHaveText('128 × 192 px', { timeout: 20_000 });
   expect(downloads).toBe(1);
 
   await pickGenerated(page, 768, 768);
-  await button(page, 'Upscale').click();
+  await toolTab(page, 'Upscale').click();
   await button(page, 'Apply upscale').click();
   await expect(page.getByRole('status').filter({ hasText: /Tile \d+ of \d+/ })).toBeVisible();
   await button(page, 'Cancel edit').click();
@@ -106,7 +106,7 @@ test('cancels tile inference and reuses verified chunks across workers', async (
   await page.reload();
   await pick(page, 'oriented.png');
   await waitForImage(page, 'oriented.png');
-  await button(page, 'Upscale').click();
+  await toolTab(page, 'Upscale').click();
   await button(page, 'Apply upscale').click();
   await expect(dimensions(page)).toHaveText('128 × 192 px', { timeout: 20_000 });
   expect(downloads).toBe(1);
@@ -118,7 +118,7 @@ test('times the real Photo model at 1000×1000 to 4× on desktop Chromium', asyn
   test.setTimeout(430_000);
   await openImageWorkspace(page);
   await pickGenerated(page, 1000, 1000);
-  await button(page, 'Upscale').click();
+  await toolTab(page, 'Upscale').click();
   await page.getByRole('radio', { name: '4×', exact: true }).check();
   const started = performance.now();
   await button(page, 'Apply upscale').click();

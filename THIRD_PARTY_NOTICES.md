@@ -34,3 +34,10 @@ FileKit distributes the 344,799-byte checkpoint without changes. The worker veri
 ## Interface font
 
 [Inter 4.1](https://github.com/rsms/inter/tree/e3a3d4c57d5ecc01453a575621882a384c1995a3) is copyright The Inter Project Authors and distributed under the SIL Open Font License 1.1. FileKit serves the authors’ variable WOFF2 from its own origin. [License](licenses/inter/Inter-OFL.txt)
+
+## Interface components and image export
+
+| Component | License and attribution |
+| --- | --- |
+| [shadcn/ui](https://github.com/shadcn-ui/ui/tree/main/apps/v4/registry/new-york-v4/ui) | MIT, Copyright (c) 2023 shadcn. Tailwind v4 components are copied into the application and adapted for FileKit. [License](licenses/shadcn/MIT.txt) |
+| [ImageMagick WASM 0.0.46](https://github.com/dlemstra/magick-wasm) | Apache-2.0, Dirk Lemstra and contributors. The worker uses the 32-bit WASM distribution. [License](licenses/magick-wasm/LICENSE) · [Bundled libraries and notices](licenses/magick-wasm/NOTICE) |

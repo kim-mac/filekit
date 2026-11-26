@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import sharp from 'sharp';
-import { downloadResult, fixtureBytes, observeModelCalls, openImageWorkspace, pick, waitForFonts, waitForImage } from './helpers';
+import { downloadResult, fixtureBytes, observeModelCalls, openImageWorkspace, pick, waitForFonts, waitForImage, toolTab, selectFormat } from './helpers';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -41,7 +41,7 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   await openImageWorkspace(page);
   await pick(page, 'bg/portrait-wind.jpg');
   await waitForImage(page, 'portrait-wind.jpg');
-  await button('Remove background').click();
+  await toolTab(page, 'Remove background').click();
   await button('Apply remove background').click();
   try {
     await expect.poll(() => chunks, { timeout: 30_000 }).toBeGreaterThan(0);
@@ -57,8 +57,8 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   const tools = page.getByRole('region', { name: 'Tools' });
   await expect(tools.getByText(/Quality mode Lite/)).toBeVisible({ timeout: 180_000 });
   await expect(button('Undo')).toBeEnabled();
-  await button('Convert').click();
-  await page.getByRole('radio', { name: 'PNG', exact: true }).check();
+  await toolTab(page, 'Convert').click();
+  await selectFormat(page, 'PNG');
   await button('Apply convert').click();
   expect(await calls()).toBe(2);
   const transparent = await downloadResult(page, 'Export image');
@@ -69,8 +69,8 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   expect((await photo.stats()).channels[3]).toMatchObject({ min: 0, max: 255 });
 
   const firstDownloadCount = chunks;
-  await button('Remove background').click();
-  await page.getByRole('radio', { name: 'Solid color', exact: true }).check();
+  await toolTab(page, 'Remove background').click();
+  await page.getByRole('radio', { name: 'Color', exact: true }).check();
   await page.getByLabel('Background color').fill('#104e32');
   await button('Apply remove background').click();
   const colored = await downloadResult(page, 'Export image');
@@ -85,9 +85,9 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   await expect(page.getByRole('radio', { name: 'Transparent', exact: true })).toBeChecked();
   await expect(button('Redo')).toBeEnabled();
   await button('Redo').click();
-  await expect(page.getByRole('radio', { name: 'Solid color', exact: true })).toBeChecked();
+  await expect(page.getByRole('radio', { name: 'Color', exact: true })).toBeChecked();
 
-  await button('Crop').click();
+  await toolTab(page, 'Crop').click();
   await page.getByRole('radio', { name: '1:1', exact: true }).check();
   await button('Apply crop').click();
   const cropped = await downloadResult(page, 'Export image');
@@ -100,7 +100,7 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
     name: 'private-bg-fixture.jpg', mimeType: 'image/jpeg', buffer: await fixtureBytes('bg/portrait-wind.jpg'),
   });
   await waitForImage(page, 'private-bg-fixture.jpg');
-  await button('Remove background').click();
+  await toolTab(page, 'Remove background').click();
   await button('Apply remove background').click();
   await expect(tools.getByText(/Quality mode Lite/)).toBeVisible({ timeout: 90_000 });
   expect(chunks).toBe(firstDownloadCount);
@@ -129,10 +129,14 @@ test('iPhone WebKit uses the quantized Lite worker and shows its output cap', as
   await openImageWorkspace(page);
   await pick(page, 'bg/portrait-wind.jpg');
   await waitForImage(page, 'portrait-wind.jpg');
-  await page.getByRole('button', { name: 'Remove background', exact: true }).tap();
+  await toolTab(page, 'Remove background').tap();
   await page.getByRole('button', { name: 'Apply remove background' }).tap();
   await expect(page.getByText('Quality mode Lite · WASM')).toBeVisible({ timeout: 120_000 });
   await expect(page.getByText('Maximum output edge on this device is 1280 px.')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Export' }).getByLabel('Fill transparent areas with')).toHaveValue('#ffffff');
+  await toolTab(page, 'Convert').tap();
+  await selectFormat(page, 'PNG');
+  await page.getByRole('button', { name: 'Apply convert' }).tap();
   const result = await downloadResult(page, 'Export image');
   expect(await sharp(result.bytes).metadata()).toMatchObject({ format: 'png', hasAlpha: true });
   expect(requests).toContain('/bg-runtime/ios/int8-full-512.ort.json');
