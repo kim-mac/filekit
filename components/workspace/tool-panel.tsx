@@ -6,16 +6,19 @@ import { Progress } from '../ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 export function ToolPanel<State, Context>({
-  registry, context, initialOptions, revision, onApply, onBusyChange, disabled,
+  registry, session, onBusyChange, disabled,
 }: {
   registry: CategoryRegistry<State, Context>;
-  context: Context;
-  initialOptions: Readonly<Record<string, unknown>>;
-  revision: object;
-  onApply: (command: EditCommand) => void;
+  session?: {
+    context: Context;
+    initialOptions: Readonly<Record<string, unknown>>;
+    revision: object;
+    onApply: (command: EditCommand) => void;
+  };
   onBusyChange: (busy: boolean) => void;
   disabled: boolean;
 }) {
+  const revision = session?.revision;
   const tools = registry.list();
   const [activeId, setActiveId] = useState(tools[0]?.id);
   const [draft, setDraft] = useState<{ revision: object; options: Readonly<Record<string, unknown>> }>();
@@ -33,15 +36,15 @@ export function ToolPanel<State, Context>({
       }
     };
   }, [onBusyChange, revision]);
-  const drafts = draft?.revision === revision ? draft.options : {};
+  const drafts = draft && draft.revision === revision ? draft.options : {};
   if (!activeId) return null;
   const tool = registry.get(activeId);
-  const options = drafts[activeId] ?? initialOptions[activeId] ?? tool.defaultOptions;
+  const options = drafts[activeId] ?? session?.initialOptions[activeId] ?? tool.defaultOptions;
 
   const busy = Boolean(progress);
-  const applyDisabled = disabled || busy || Boolean(tool.getApplyError?.(options, context));
+  const applyDisabled = !session || disabled || busy || Boolean(tool.getApplyError?.(options, session.context));
   async function submit() {
-    if (applyDisabled || activeJob.current) return;
+    if (!session || applyDisabled || activeJob.current) return;
     const controller = new AbortController();
     try {
       let value = tool.parseOptions(options);
@@ -50,11 +53,11 @@ export function ToolPanel<State, Context>({
         activeJob.current = controller;
         onBusyChange(true);
         setProgress({ message: 'Preparing edit…', progress: 0 });
-        value = await tool.prepareOptions(value, context, controller.signal, update => {
+        value = await tool.prepareOptions(value, session.context, controller.signal, update => {
           if (!controller.signal.aborted) setProgress(update);
         });
       }
-      if (!controller.signal.aborted) onApply({ toolId: tool.id, options: tool.parseOptions(value) });
+      if (!controller.signal.aborted) session.onApply({ toolId: tool.id, options: tool.parseOptions(value) });
     } catch (error) {
       if (!controller.signal.aborted) setStatus(error instanceof Error ? error.message : 'This edit could not be applied.');
     } finally {
@@ -71,13 +74,13 @@ export function ToolPanel<State, Context>({
       onValueChange={id => { setActiveId(id); setStatus(''); }}>
       <TabsList className="tool-bar" aria-label="Available tools">
         {tools.map(({ id, name, icon: Icon }) => (
-          <TabsTrigger key={id} value={id} disabled={disabled || busy}>
+          <TabsTrigger key={id} value={id} disabled={!session || disabled || busy}>
             <Icon aria-hidden /> {name}
           </TabsTrigger>
         ))}
       </TabsList>
       <TabsContent value={activeId}>
-        <form onSubmit={(event) => {
+        {!session ? <p className="section-note">Add an image to start</p> : <form onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}>
@@ -85,8 +88,8 @@ export function ToolPanel<State, Context>({
             <Suspense fallback={<p role="status">Opening tool…</p>}>
               <tool.OptionsPanel
                 value={options}
-                context={context}
-                onChange={(value) => setDraft({ revision, options: { ...drafts, [activeId]: value } })}
+                context={session.context}
+                onChange={(value) => setDraft({ revision: session.revision, options: { ...drafts, [activeId]: value } })}
               />
             </Suspense>
           </fieldset>
@@ -105,7 +108,7 @@ export function ToolPanel<State, Context>({
             </div>
           )}
           {status && <p role="status">{status}</p>}
-        </form>
+        </form>}
       </TabsContent>
     </Tabs>
   );

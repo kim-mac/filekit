@@ -1,8 +1,10 @@
+import { OutputEstimate } from '../../../components/workspace/output-estimate';
 import { ColorField } from '../../../components/ui/color-field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
 import { Slider } from '../../../components/ui/slider';
 import { Toggle } from '../../../components/ui/toggle';
 import type { ImageToolContext } from './context';
+import { formatIconDimensions } from './size-estimate';
 import { iconSizes, outputFormats, resolveOutput, type ConvertOptions, type OutputSelection } from './formats';
 
 export default function ConvertOptionsPanel({ value, onChange, context }: {
@@ -11,7 +13,8 @@ export default function ConvertOptionsPanel({ value, onChange, context }: {
   context: ImageToolContext;
 }) {
   const { originalFormat, hasAlpha, disabled } = context;
-  const { format } = resolveOutput(originalFormat, value);
+  const resolved = resolveOutput(originalFormat, value);
+  const { format } = resolved;
   const output = outputFormats[format];
   const sizes = value.iconSizes ?? iconSizes;
   return (
@@ -37,7 +40,8 @@ export default function ConvertOptionsPanel({ value, onChange, context }: {
         <div className="quality-field">
           <span>Quality <output>{value.quality}%</output></span>
           <Slider className="h-9" aria-label="Quality" min={1} max={100} value={[value.quality]}
-            onValueChange={([quality]) => onChange({ ...value, quality })} disabled={disabled} />
+            aria-describedby="convert-quality-help" onValueChange={([quality]) => onChange({ ...value, quality })} disabled={disabled} />
+          <p className="section-note" id="convert-quality-help">Higher = better look, bigger file</p>
         </div>
       )}
       {hasAlpha && !output.alpha && (
@@ -57,10 +61,11 @@ export default function ConvertOptionsPanel({ value, onChange, context }: {
               >{size} px</Toggle>
             ))}
           </div>
-          <p className="section-note">All selected sizes go into one ICO file. Images are fitted and centered.</p>
+          <p className="section-note">{formatIconDimensions(sizes)} in one file. Images are fitted and centered.</p>
         </fieldset>
       )}
+      <OutputEstimate estimator={context.estimator} preview={context.previewBlob} output={resolved}
+        size={context.size} paused={disabled} />
     </div>
   );
 }
-

@@ -1,10 +1,10 @@
 import { performance } from 'node:perf_hooks';
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
-import { downloadResult, fileRow, openImageWorkspace, pick, waitForFonts, waitForImage, toolTab } from './helpers';
+import { downloadResult, fileRow, openImageWorkspace, pick, waitForEstimates, waitForFonts, waitForImage, toolTab } from './helpers';
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
-const dimensions = (page: Page) => page.locator('.preview-footer > span');
+const dimensions = (page: Page) => page.locator('.preview-dimensions');
 const weights = /\/upscale-models\/chunks\//;
 
 async function pickGenerated(page: Page, width: number, height: number) {
@@ -37,7 +37,7 @@ test('upscales after a crop, replays history, and exports exact dimensions', asy
   await button(page, 'Apply crop').click();
   await expect(dimensions(page)).toHaveText('80 × 64 px');
   await toolTab(page, 'Upscale').click();
-  if (!desktop) await page.getByRole('radio', { name: 'Art/Text', exact: true }).check();
+  if (!desktop) await page.getByRole('radio', { name: 'Graphics', exact: true }).check();
   if (desktop) await page.getByRole('radio', { name: '4×', exact: true }).check();
   const scale = desktop ? 4 : 2;
   const result = `${80 * scale} × ${64 * scale} px`;
@@ -59,6 +59,7 @@ test('upscales after a crop, replays history, and exports exact dimensions', asy
 
   const tools = page.getByRole('region', { name: 'Tools' });
   await waitForFonts(page);
+  await waitForEstimates(page);
   await testInfo.attach('upscale-controls', { body: await tools.screenshot(), contentType: 'image/png' });
   if (['desktop-chromium', 'android-chromium'].includes(testInfo.project.name)) {
     await expect(tools).toHaveScreenshot('upscale-controls.png', { maxDiffPixelRatio: 0.04 });

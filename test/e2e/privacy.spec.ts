@@ -8,7 +8,7 @@ test('lazy codec, face detection, and upscale assets stay same origin and files 
   // This flow cold-loads the GIF encoder, YuNet, and an Upscale model on the same page.
   test.setTimeout(60_000);
   const origin = new URL(baseURL!).origin;
-  const fixtures = ['oriented.jpg', 'reference.heic', 'animated.gif', 'transparent.png', 'reference.webp', 'reference.avif', 'bg/person-urban.jpg'];
+  const fixtures = ['oriented.jpg', 'reference.heic', 'animated.gif', 'transparent.png', 'reference.webp', 'reference.avif', 'location-metadata.jpg', 'bg/person-urban.jpg'];
   const markers = [...fixtures.map((name) => name.split('/').at(-1)!), 'filekit-private-fixture-marker'];
   const bytes = await Promise.all(fixtures.map(fixtureBytes));
   for (const file of bytes) {
@@ -69,7 +69,7 @@ test('lazy codec, face detection, and upscale assets stay same origin and files 
   expect([...requests].filter(url => upscaleChunk.test(url))).toEqual([]);
   await fileRow(page, 'oriented.jpg').getByRole('button', { name: /^oriented\.jpg/ }).click();
   await toolTab(page, 'Upscale').click();
-  await page.getByRole('radio', { name: 'Art/Text', exact: true }).check();
+  await page.getByRole('radio', { name: 'Graphics', exact: true }).check();
   await page.getByRole('button', { name: 'Apply upscale' }).click();
   await expect(page.getByText(/Applied with Real-ESRGAN Anime/)).toBeVisible();
   expect((await downloadResult(page, 'Export image')).bytes.length).toBeGreaterThan(0);

@@ -13,6 +13,7 @@ await rm(outdir, { recursive: true, force: true });
 await build({
   entryPoints: {
     'image.worker': 'lib/workers/image.worker.ts',
+    'size-estimate.worker': 'lib/workers/image/size-estimate.worker.ts',
     'background.worker': 'lib/workers/bg0/background.worker.ts',
     'faces.worker': 'lib/workers/image/faces.worker.ts',
     // AVIF's pthread loader imports this stable sibling URL.

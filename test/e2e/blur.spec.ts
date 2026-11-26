@@ -143,7 +143,7 @@ test('draws, erases, moves, resizes, deletes, and replays blur regions', async (
       [midpoint(box, 0.38, 0.4), midpoint(box, 0.62, 0.6)],
       [midpoint(box, 0.3, 0.31), midpoint(box, 0.8, 0.76)],
     );
-    await expect.poll(async () => Number(await editor.getAttribute('data-zoom'))).toBeGreaterThan(1.2);
+    await expect.poll(async () => Number(await page.locator('.preview-stage').getAttribute('data-zoom'))).toBeGreaterThan(1.2);
     await expect(editor.locator('canvas')).toHaveCount(0);
   }
 });

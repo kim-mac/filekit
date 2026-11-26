@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, Columns2, ImagePlus, Layers, Plus, Redo2, Undo2 } from 'lucide-react';
+import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, Columns2, ImagePlus, Layers, Minus, Plus, Redo2, Undo2 } from 'lucide-react';
 import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import { activeCommands, createEditStack, recordEdit, redo, undo, type EditStack } from '../../lib/core/edit-stack';
 import { imageTools } from '../../lib/tools/image';
 import type { ImageAIResults } from '../../lib/tools/image/ai-results';
-import { outputFormats } from '../../lib/tools/image/formats';
+import type { Size } from '../../lib/tools/image/geometry';
+import { iconSizes, outputFormats } from '../../lib/tools/image/formats';
+import { formatBytes, formatDimensions, formatIconDimensions } from '../../lib/tools/image/size-estimate';
 import { ImageWorkerClient } from '../../lib/workers/image-client';
 import type { ImageExport, ImageInfo, ImageProgress, PreviewResult } from '../../lib/workers/image/types';
 import { Button } from '../ui/button';
@@ -16,6 +18,9 @@ import { Toggle } from '../ui/toggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { FileTile } from './file-tile';
 import { ImageComparison } from './image-comparison';
+import { ImageDetails } from './image-details';
+import { OutputEstimate, SizeEstimator } from './output-estimate';
+import { usePreviewView } from './use-preview-view';
 import { ToolPanel } from './tool-panel';
 import { useObjectUrl } from './use-object-url';
 
@@ -57,6 +62,7 @@ function jobMessage(update: ImageProgress) {
 
 export function ImageWorkspace() {
   const [client] = useState(() => new ImageWorkerClient());
+  const [estimator] = useState(() => new SizeEstimator());
   const [entries, setEntries] = useState<readonly Entry[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [preview, setPreview] = useState<Preview>();
@@ -72,9 +78,10 @@ export function ImageWorkspace() {
   const [before, setBefore] = useState<{ key: string; blob: Blob }>();
   const [notice, setNotice] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const [previewTarget, setPreviewTarget] = useState<HTMLDivElement | null>(null);
+  const [draftSize, setDraftSize] = useState<Size>();
   const dragDepth = useRef(0);
-  const swipeStart = useRef<{ id: number; x: number; y: number } | undefined>(undefined);
   const picker = useRef<HTMLInputElement>(null);
   const fileStrip = useRef<HTMLUListElement>(null);
 
@@ -92,6 +99,9 @@ export function ImageWorkspace() {
   const comparisonKey = selected && mapping ? JSON.stringify([selected.id, mapping]) : undefined;
   const comparisonUrl = useObjectUrl(comparing && previewIsCurrent && selected?.stack.cursor &&
     before?.key === comparisonKey ? before?.blob : undefined);
+  const previewSize = shownPreview?.result.info;
+  const canvasSize = previewSize && !comparisonUrl ? draftSize ?? previewSize : previewSize;
+  const viewport = usePreviewView(stage, canvasSize, selected?.id, entries.length > 1 ? selectAdjacent : undefined);
   const comparisonOriginal = selected?.stack.original;
   const beforeKey = before?.key;
   const selectedInfo = selected?.info;
@@ -235,7 +245,8 @@ export function ImageWorkspace() {
     };
   }, [client, exportJob, updateEntry]);
 
-  useEffect(() => () => client.stop(), [client]);
+  useEffect(() => () => { client.stop(); estimator.stop(); }, [client, estimator]);
+  useEffect(() => { if (jobsLocked) estimator.stop(); }, [estimator, jobsLocked]);
 
   const addFiles = useCallback((files: readonly File[]) => {
     if (!files.length || jobsLocked) return;
@@ -390,23 +401,10 @@ export function ImageWorkspace() {
             </div>
           </div>
           <div
-            ref={setPreviewTarget}
-            className={`preview-stage ${previewUrl ? 'checkerboard' : ''} ${comparisonUrl ? 'is-comparing' : ''}`}
+            ref={setStage}
+            className={`preview-stage ${previewUrl ? 'checkerboard is-loaded' : ''} ${comparisonUrl ? 'is-comparing' : ''} ${viewport.panning ? 'is-panning' : ''}`}
             aria-busy={Boolean(selected && selected.id === work?.id)}
-            onPointerDown={(event) => {
-              if (event.pointerType !== 'touch' || comparisonUrl) return;
-              swipeStart.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
-            }}
-            onPointerCancel={() => { swipeStart.current = undefined; }}
-            onPointerUp={(event) => {
-              const start = swipeStart.current;
-              swipeStart.current = undefined;
-              if (!start || start.id !== event.pointerId) return;
-              const distance = event.clientX - start.x;
-              if (Math.abs(distance) > 50 && Math.abs(distance) > Math.abs(event.clientY - start.y)) {
-                selectAdjacent(distance < 0 ? 1 : -1);
-              }
-            }}
+            data-zoom={viewport.view.scale}
           >
             {!selected && (
               <button type="button" className="empty-state empty-picker" onClick={() => picker.current?.click()}>
@@ -417,9 +415,14 @@ export function ImageWorkspace() {
               </button>
             )}
             {selected && previewUrl && shownPreview && (
-              <ImageComparison name={selected.stack.original.name} editedUrl={previewUrl} originalUrl={comparisonUrl}
-                width={shownPreview.result.info.width} height={shownPreview.result.info.height}
-                position={split} onPositionChange={setSplit} />
+              <div ref={setPreviewTarget} className="preview-plane" style={{
+                transform: viewport.view.scale === 1 && viewport.view.x === 0 && viewport.view.y === 0
+                  ? undefined : `translate(${viewport.view.x}px, ${viewport.view.y}px) scale(${viewport.view.scale})`,
+              }}>
+                <ImageComparison name={selected.stack.original.name} editedUrl={previewUrl} originalUrl={comparisonUrl}
+                  width={shownPreview.result.info.width} height={shownPreview.result.info.height}
+                  position={split} onPositionChange={setSplit} />
+              </div>
             )}
             {selected && !previewUrl && selected.status === 'paused' && (
               <div className="empty-state">
@@ -436,7 +439,17 @@ export function ImageWorkspace() {
             )}
           </div>
           <div className="preview-footer">
-            <span>{selectedInfo ? `${selectedInfo.width} × ${selectedInfo.height} px` : 'Dimensions appear after decoding'}</span>
+            {selected && selectedInfo && <div className="preview-facts">
+              <p><span className="preview-dimensions">{formatDimensions(selectedInfo)}</span> · {formatBytes(selected.stack.original.size)}</p>
+              <ImageDetails info={selectedInfo} />
+            </div>}
+            {previewUrl && <div className="zoom-controls" role="group" aria-label="Preview zoom">
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Zoom out" onClick={() => viewport.zoom(0.8)}><Minus aria-hidden /></Button>
+              <output aria-label="Zoom percentage">{viewport.percent}%</output>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Zoom in" onClick={() => viewport.zoom(1.25)}><Plus aria-hidden /></Button>
+              <Button type="button" variant="outline" size="sm" aria-pressed={viewport.atFit} onClick={viewport.reset}>Fit</Button>
+              <Button type="button" variant="outline" size="sm" aria-pressed={viewport.atActualSize} onClick={viewport.actual}>100%</Button>
+            </div>}
             <div className="history-buttons" role="group" aria-label="Edit history">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -487,34 +500,41 @@ export function ImageWorkspace() {
         <aside className="workspace-sidebar" aria-label="Editing and export">
           <Card className="workspace-card settings-panel" role="region" aria-labelledby="tools-title">
             <div className="panel-heading"><h2 id="tools-title">Tools</h2></div>
-            {selected && selectedInfo && (
-              <ToolPanel revision={selected.stack}
-                registry={imageTools} context={{
+            <ToolPanel registry={imageTools} disabled={toolsDisabled} onBusyChange={setToolBusy}
+              session={selected && selectedInfo ? {
+                revision: selected.stack,
+                context: {
                   original: selected.stack.original, editKey, aiResults, releaseImageMemory: () => client.releaseFullPreview(),
-                  originalFormat: selectedInfo.format,
+                  originalFormat: selectedInfo.format, output: selectedInfo.output, estimator,
                   hasAlpha: selectedInfo.hasAlpha, size: selectedInfo, previewUrl, previewBlob: shownPreview?.result.blob,
-                  previewTarget, renderDraft, preparePreview, upscale: selectedInfo.upscale, disabled: toolsDisabled,
-                }}
-                initialOptions={{
+                  previewTarget, setDraftSize, renderDraft, preparePreview, upscale: selectedInfo.upscale, disabled: toolsDisabled,
+                },
+                initialOptions: {
                   ...Object.fromEntries(activeCommands(selected.stack)
                     .filter(command => imageTools.get(command.toolId).rememberOptions)
                     .map(command => [command.toolId, command.options])),
                   convert: selectedInfo.conversion,
-                }}
-                disabled={toolsDisabled}
-                onBusyChange={setToolBusy}
-                onApply={(command: EditCommand) => edit(selected, recordEdit(selected.stack, command))} />
-            )}
-            {(!selected || !selectedInfo) && <p className="section-note">Select a decoded image to edit its output.</p>}
+                },
+                onApply: (command: EditCommand) => edit(selected, recordEdit(selected.stack, command)),
+              } : undefined} />
           </Card>
 
           <Card className="workspace-card export-panel" role="region" aria-labelledby="export-title">
             <div className="panel-heading"><h2 id="export-title">Export</h2></div>
             <div className="export-content">
-              {selectedInfo && <p className="output-summary">
-                {outputFormats[selectedInfo.output.format].label}
-                {outputFormats[selectedInfo.output.format].lossy && ` · Quality ${selectedInfo.output.quality}%`}
-              </p>}
+              {selectedInfo && <>
+                <p className="output-summary">
+                  {outputFormats[selectedInfo.output.format].label}
+                  {outputFormats[selectedInfo.output.format].lossy && ` · Quality ${selectedInfo.output.quality}%`}
+                </p>
+                <p className="section-note">
+                  {selectedInfo.output.format === 'ico'
+                    ? formatIconDimensions(selectedInfo.output.iconSizes ?? iconSizes)
+                    : formatDimensions(selectedInfo)}
+                </p>
+                <OutputEstimate estimator={estimator} preview={shownPreview?.result.blob} output={selectedInfo.output}
+                  size={selectedInfo} paused={!previewIsCurrent || jobsLocked} />
+              </>}
               {selected && selectedInfo?.hasAlpha && !outputFormats[selectedInfo.output.format].alpha && (
                 <ColorField label="Fill transparent areas with" value={selectedInfo.output.background} disabled={toolsDisabled}
                   onChange={background => edit(selected, recordEdit(selected.stack, {

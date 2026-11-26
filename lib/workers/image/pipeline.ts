@@ -22,6 +22,7 @@ type DecodedImage = Awaited<ReturnType<typeof decodeImage>>;
 interface PreviewSource {
   readonly id: string;
   readonly format: DecodedImage['format'];
+  readonly details?: DecodedImage['details'];
   readonly width: number;
   readonly height: number;
   readonly maxEdge: number;
@@ -37,6 +38,7 @@ interface UpscaledRaster {
   readonly mapping: SourceMapping;
   readonly quality: UpscaleQuality;
   readonly format: DecodedImage['format'];
+  readonly details?: DecodedImage['details'];
 }
 
 let activeFile: string | undefined;
@@ -55,10 +57,10 @@ export function retainPreview(id: string) {
   activeUpscaled = undefined;
 }
 
-async function decodeOriginal(original: File, report: ReportStage, normalize = true) {
+async function decodeOriginal(original: File, report: ReportStage, normalize = true, details = false) {
   report('Decoding');
   try {
-    return await decodeImage(original, normalize);
+    return await decodeImage(original, normalize, details);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('Unsupported image.')) throw error;
     throw new Error('This image could not be decoded. Check that the original opens and add it again.', { cause: error });
@@ -72,13 +74,13 @@ async function previewSource(request: PreviewRequest, report: ReportStage): Prom
   const cached = cache ? activePreview : undefined;
   if (cached?.maxEdge === maxEdge) return cached;
   const decoded = cached?.fullFrame
-    ? { frame: cached.fullFrame, format: cached.format }
+    ? { frame: cached.fullFrame, format: cached.format, details: cached.details }
     : await decodeForPreview(original, report);
-  const { frame, format } = decoded;
+  const { frame, format, details } = decoded;
   const base = resizePreview(frame, maxEdge);
   const source: PreviewSource = {
-    id, format, width: frame.width, height: frame.height, maxEdge, base,
-    hasAlpha: hasTransparency(base),
+    id, format, details, width: frame.width, height: frame.height, maxEdge, base,
+    hasAlpha: details?.transparent ?? hasTransparency(base),
     fullFrame: cache ? frame : undefined,
   };
   if (cache && activeFile === id) activePreview = source;
@@ -93,7 +95,7 @@ function decodeForPreview(original: File, report: ReportStage) {
   // Intake can validate another file while the selection remains unchanged.
   // Keep the selected preview base and make room for the temporary decode.
   releaseFullPreview();
-  return decodeOriginal(original, report);
+  return decodeOriginal(original, report, true, true);
 }
 
 async function encodePreview(frame: ImageData, hasAlpha: boolean, sourceFormat: DecodedImage['format']): Promise<Blob> {
@@ -185,7 +187,7 @@ export async function renderPreview(request: PreviewRequest, progress: ProgressC
   return {
     blob: rendered.blob, thumbnail,
     mapping: mapSource(sourceMapping, source, geometry),
-    info: { ...geometrySize(outputGeometry), hasAlpha: rendered.hasAlpha, format, conversion, output: resolveOutput(format, conversion) },
+    info: { ...geometrySize(outputGeometry), hasAlpha: rendered.hasAlpha, details: source.details, format, conversion, output: resolveOutput(format, conversion) },
   };
 }
 
@@ -243,10 +245,13 @@ async function rasterStage(
 }
 
 async function upscalePrefix(
-  request: ImageRequest, program: UpscaleProgram, report: ReportStage,
+  request: ImageRequest, program: UpscaleProgram, report: ReportStage, preview = false,
 ): Promise<UpscaledRaster> {
   releaseFullPreview();
-  let { frame, format } = await decodeOriginal(request.original, report);
+  const originalDetails = activePreview?.id === request.id ? activePreview.details : undefined;
+  const original = await decodeOriginal(request.original, report, true, preview && !originalDetails);
+  const { format, details = originalDetails } = original;
+  let { frame } = original;
   let mapping = sourceMapping;
   let quality: UpscaleQuality | undefined;
   let state: ImageState = { geometry: fullGeometry(frame), output: keepOriginalOptions };
@@ -267,7 +272,7 @@ async function upscalePrefix(
     state = { geometry: fullGeometry(frame), output: state.output };
   }
   if (!quality) throw new Error('An upscale edit is required.');
-  return { frame, size: { width: frame.width, height: frame.height }, format, mapping, quality };
+  return { frame, size: { width: frame.width, height: frame.height }, format, details, mapping, quality };
 }
 
 async function finishUpscale(
@@ -299,7 +304,7 @@ async function renderUpscaledPreview(request: PreviewRequest, program: UpscalePr
   let raster = cached?.maxEdge === maxEdge ? cached.raster : undefined;
   if (!raster) {
     if (cache && !cached) activeUpscaled = undefined;
-    const full = cached?.full ?? await upscalePrefix(request, program, report);
+    const full = cached?.full ?? await upscalePrefix(request, program, report, true);
     raster = { ...full, frame: resizePreview(full.frame, maxEdge) };
     const memory = (globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined)?.deviceMemory;
     if (cache && activeFile === request.id) {
@@ -315,7 +320,7 @@ async function renderUpscaledPreview(request: PreviewRequest, program: UpscalePr
   return {
     blob, thumbnail: request.thumbnail ? await makeThumbnail(frame) : undefined,
     mapping: mapSource(raster.mapping, raster.size, geometry),
-    info: { ...geometrySize(geometry), hasAlpha, format: raster.format, output, conversion, upscale: raster.quality },
+    info: { ...geometrySize(geometry), hasAlpha, format: raster.format, details: raster.details, output, conversion, upscale: raster.quality },
   };
 }
 

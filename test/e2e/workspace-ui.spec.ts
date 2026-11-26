@@ -3,19 +3,26 @@ import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import {
   applyConversion, downloadResult, fileRow, fixturePath, openImageWorkspace, outputFormat, pick, selectFormat, setSlider,
-  toolTab, waitForFonts, waitForImage,
+  toolTab, waitForEstimates, waitForFonts, waitForImage,
 } from './helpers';
 
 test.use({ colorScheme: 'light' });
 
 test('opens the picker from Preview and the add tile, and downloads a nonselected file with its saved edits', async ({ page, isMobile }) => {
   await openImageWorkspace(page);
+  for (const name of ['Convert', 'Crop', 'Blur', 'Remove background', 'Upscale']) {
+    await expect(toolTab(page, name)).toBeDisabled();
+  }
+  await expect(page.getByText('Add an image to start')).toBeVisible();
   const preview = page.getByRole('region', { name: 'Preview' });
   const [first] = await Promise.all([
     page.waitForEvent('filechooser'), preview.getByRole('button', { name: /Drop images here/ }).click(),
   ]);
   await first.setFiles(fixturePath('transparent.png'));
   await waitForImage(page, 'transparent.png');
+  for (const name of ['Convert', 'Crop', 'Blur', 'Remove background', 'Upscale']) {
+    await expect(toolTab(page, name)).toBeEnabled();
+  }
   await applyConversion(page, 'JPG', 90, '#000000');
   const [more] = await Promise.all([
     page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Add more images' }).click(),
@@ -74,7 +81,7 @@ test('selects the HEIC fallback and exports new formats through the same-origin 
   expect(ico.name).toBe('transparent.ico');
   expect(ico.bytes.readUInt16LE(4)).toBe(5);
   expect(ico.bytes[6]).toBe(32);
-  expect(codecRequests).toBe(1);
+  expect(codecRequests).toBeGreaterThanOrEqual(1);
 });
 
 async function imageReady(page: Page, name: string) {
@@ -88,6 +95,7 @@ test('compares an edited image with matching framing and captures each workspace
     await page.evaluate(() => scrollTo(0, 0));
     if (!isMobile) await page.locator('h1').hover();
     await waitForFonts(page);
+    await waitForEstimates(page);
     await expect(page).toHaveScreenshot(`workspace-${state}.png`, { fullPage: true, animations: 'disabled', maxDiffPixelRatio: 0.04 });
   };
 

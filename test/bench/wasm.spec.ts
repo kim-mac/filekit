@@ -61,7 +61,7 @@ for (const single of [true, false]) {
     await page.getByRole('radio', { name: '4×', exact: true }).check();
     const upscaleStart = performance.now();
     await button('Apply upscale').click();
-    await expect(page.locator('.preview-footer > span')).toHaveText('4000 × 4000 px', { timeout: 420_000 });
+    await expect(page.locator('.preview-dimensions')).toHaveText('4000 × 4000 px', { timeout: 420_000 });
     const upscaleMs = Math.round(performance.now() - upscaleStart);
     await expect(page.getByText('Applied with Real-ESRGAN General · WASM')).toBeVisible();
     const cachedStart = performance.now();

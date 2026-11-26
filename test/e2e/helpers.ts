@@ -95,3 +95,9 @@ export async function observeModelCalls(page: Page, method: 'findFaces' | 'makeM
   }, method);
   return () => page.evaluate(() => (window as Window & { filekitTestModelCalls?: number }).filekitTestModelCalls);
 }
+
+export async function waitForEstimates(page: Page) {
+  for (const output of await page.locator('.output-estimate strong').all()) {
+    await expect(output).toHaveText(/^≈ /, { timeout: 20_000 });
+  }
+}

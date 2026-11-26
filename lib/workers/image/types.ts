@@ -2,6 +2,7 @@ import type { EditCommand } from '../../core/contracts';
 import type { UpscaleQuality } from '../../tools/image/upscale-options';
 import type { ConvertOptions, InputFormat, ResolvedOutput } from '../../tools/image/formats';
 import type { SourceMapping } from '../upscale/matte';
+import type { ImageDetails } from './metadata';
 
 export interface ImageRequest {
   readonly id: string;
@@ -24,6 +25,7 @@ export interface ImageInfo {
   readonly width: number;
   readonly height: number;
   readonly hasAlpha: boolean;
+  readonly details?: ImageDetails;
   readonly upscale?: UpscaleQuality;
   readonly output: ResolvedOutput;
   readonly conversion: ConvertOptions;

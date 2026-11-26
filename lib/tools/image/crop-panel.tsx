@@ -1,9 +1,11 @@
+import { OutputEstimate } from '../../../components/workspace/output-estimate';
 import { Button } from '../../../components/ui/button';
 import { ChoiceGroup } from '../../../components/ui/choice-group';
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { FlipHorizontal2, FlipVertical2, RotateCcw, RotateCw } from 'lucide-react';
 import type { ImageToolContext } from './context';
+import { framePoint } from './preview-view';
 import { cropPresets, type CropOptions, type CropPreset } from './crop';
 import {
   combineOrientations, editGeometry, fullGeometry, geometrySize, orientBounds, orientedSize, orientationMatrix,
@@ -74,6 +76,13 @@ function CropEditor({ value, context, onChange }: PanelProps) {
   const size = orientedSize(context.size, orientation);
   const sourceIsTransposed = orientation >= 5;
   const { left, top, right, bottom } = bounds;
+  const { width, height } = size;
+  const { setDraftSize } = context;
+
+  useEffect(() => {
+    setDraftSize({ width, height });
+    return () => setDraftSize(undefined);
+  }, [width, height, setDraftSize]);
 
   useEffect(() => {
     const cropBox = box.current;
@@ -88,7 +97,7 @@ function CropEditor({ value, context, onChange }: PanelProps) {
     event.stopPropagation();
     event.preventDefault();
     event.currentTarget.focus({ preventScroll: true });
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
       pointerId: event.pointerId, handle, bounds, x: event.clientX, y: event.clientY,
       viewport: viewport.current.getBoundingClientRect(),
@@ -98,13 +107,16 @@ function CropEditor({ value, context, onChange }: PanelProps) {
   function moveDrag(event: PointerEvent<HTMLDivElement>) {
     const start = drag.current;
     if (context.disabled || !start || start.pointerId !== event.pointerId) return;
-    const dx = (event.clientX - start.x) / start.viewport.width;
-    const dy = (event.clientY - start.y) / start.viewport.height;
-    onChange({ ...value, bounds: adjustBounds(start.bounds, start.handle, dx, dy, size, cropPresets[preset]) });
+    const before = framePoint(start, start.viewport);
+    const after = framePoint({ x: event.clientX, y: event.clientY }, start.viewport);
+    onChange({ ...value, bounds: adjustBounds(start.bounds, start.handle, after.x - before.x, after.y - before.y, size, cropPresets[preset]) });
   }
 
   function finishDrag(event: PointerEvent<HTMLDivElement>) {
-    if (drag.current?.pointerId === event.pointerId) drag.current = null;
+    const start = drag.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    drag.current = null;
+    if (event.type === 'pointercancel') onChange({ ...value, bounds: start.bounds });
   }
 
   function nudge(event: KeyboardEvent<HTMLElement>, handle: Handle) {
@@ -221,6 +233,8 @@ export default function CropOptionsPanel({ value, context, onChange }: PanelProp
         ))}
       </div>
       <output className="crop-size" aria-label="Crop size">{dimension.width} × {dimension.height} px</output>
+      <OutputEstimate estimator={context.estimator} preview={context.previewBlob} output={context.output}
+        size={dimension} crop={{ bounds, orientation }} paused={context.disabled} />
       <p className="section-note" id="crop-instructions">Drag the box or its corners. Use arrow keys to move the focused box or corner.</p>
     </div>
   );

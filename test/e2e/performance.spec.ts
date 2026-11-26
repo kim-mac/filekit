@@ -86,7 +86,7 @@ test('times first and subsequent previews and full-resolution export for a 6000�
   await observePreview(page, 'click');
   await page.getByRole('button', { name: 'Apply crop' }).click();
   const rotatedPreviewMs = await previewTiming(page);
-  await expect(page.locator('.preview-footer > span')).toHaveText('4000 × 6000 px');
+  await expect(page.locator('.preview-dimensions')).toHaveText('4000 × 6000 px');
 
   let rotatedPeakKiB: number | undefined;
   let rotatedExportMs: number | undefined;

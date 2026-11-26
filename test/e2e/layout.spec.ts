@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openImageWorkspace, pick, waitForFonts, waitForImage, toolTab } from './helpers';
+import { openImageWorkspace, pick, waitForEstimates, waitForFonts, waitForImage, toolTab } from './helpers';
 
 test.use({ colorScheme: 'light' });
 
@@ -44,6 +44,7 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(await page.evaluate(() => document.documentElement.clientWidth));
 
   await waitForFonts(page);
+  await waitForEstimates(page);
   const workspace = await page.screenshot({ path: testInfo.outputPath('workspace.png'), fullPage: true, animations: 'disabled' });
   await testInfo.attach('workspace', { body: workspace, contentType: 'image/png' });
 
@@ -63,6 +64,7 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
   await expect(page.getByRole('button', { name: 'Resize crop from bottom right' })).toBeVisible();
   await page.evaluate(() => scrollTo(0, 0));
   await waitForFonts(page);
+  await waitForEstimates(page);
   const crop = await page.screenshot({ path: testInfo.outputPath('crop.png'), fullPage: true, animations: 'disabled' });
   await testInfo.attach('crop', { body: crop, contentType: 'image/png' });
   if (usesSnapshots) {

@@ -1,3 +1,5 @@
+import { OutputEstimate } from '../../../components/workspace/output-estimate';
+import { RadioGroup, RadioGroupItem } from '../../../components/ui/radio-group';
 import { ChoiceGroup } from '../../../components/ui/choice-group';
 import { isMobileDevice } from '../../core/device';
 import models from '../../workers/upscale/models.json';
@@ -23,10 +25,22 @@ export default function UpscaleOptionsPanel({ value: options, context, onChange 
       </fieldset>
       <fieldset>
         <legend>Image mode</legend>
-        <ChoiceGroup label="Image mode" items={[{ value: 'photo', label: 'Photo' }, { value: 'art', label: 'Art/Text' }]}
-          value={options.mode} disabled={context.disabled} onChange={mode => onChange({ ...options, mode })} />
+        <RadioGroup aria-label="Image mode" value={options.mode} disabled={context.disabled}
+          onValueChange={mode => onChange({ ...options, mode: mode === 'photo' ? 'photo' : 'art' })}>
+          {([
+            ['photo', 'Photo', 'For camera pictures', '(people, landscapes, products)'],
+            ['art', 'Graphics', 'For illustrations, logos,', 'screenshots, text'],
+          ] as const).map(([mode, label, description, examples]) => (
+            <label className="background-choice" key={mode}>
+              <RadioGroupItem value={mode} aria-label={label} aria-describedby={`upscale-${mode}-description`} />
+              <span><strong>{label}</strong><small id={`upscale-${mode}-description`}>{description}<br />{examples}</small></span>
+            </label>
+          ))}
+        </RadioGroup>
       </fieldset>
       <p aria-live="polite">Result {width.toLocaleString('en-US')} × {height.toLocaleString('en-US')} px</p>
+      {!error && <OutputEstimate estimator={context.estimator} preview={context.previewBlob} output={context.output}
+        size={{ width, height }} paused={context.disabled} />}
       {error && <p className="file-error" role="status">{error}</p>}
       <p>{model.label} · {(model.bytes / 2 ** 20).toFixed(2)} MiB model download</p>
       <p>{mobile ? 'WASM · smaller tiles' : 'WebGPU with WASM fallback'}</p>

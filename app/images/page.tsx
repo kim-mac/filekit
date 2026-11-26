@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: 'Images · FileKit' };
 export default function ImagesPage() {
   return (
     <>
-      <header className="site-header">
+      <header className="site-header workspace-header">
         <div className="site-bar">
           <div className="site-brand">
             <Link href="/" prefetch={false} className="wordmark" aria-label="FileKit home">
