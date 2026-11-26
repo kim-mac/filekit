@@ -56,7 +56,7 @@ test('times first and subsequent previews and full-resolution export for a 6000�
   const preview = page.getByRole('img', { name: `Preview of ${fixture}` });
   const previewDimensions = await preview.evaluate((image: HTMLImageElement) => [image.naturalWidth, image.naturalHeight]);
   expect(previewDimensions).toEqual([2048, 1365]);
-  await expect(page.getByText('6000 × 4000 px')).toBeVisible();
+  await expect(page.locator('.preview-dimensions')).toHaveText('6000 × 4000 px');
 
   const subsequentPreviewMs = [];
   for (const quality of [80, 75, 70]) {

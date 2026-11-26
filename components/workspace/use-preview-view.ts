@@ -61,7 +61,7 @@ export function usePreviewView(stage: HTMLDivElement | null, size: Size | undefi
     function keydown(event: KeyboardEvent) {
       if (event.code !== 'Space' || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target;
-    if (!target) return;
+      if (!target) return;
       if (target instanceof Element && target.closest('input, textarea, select, [role=slider], [contenteditable]')) return;
       space.current = true;
       // Preserve normal page scrolling until the canvas has keyboard focus.

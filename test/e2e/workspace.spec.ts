@@ -18,7 +18,7 @@ test('intake through picker, drop, and paste isolates corrupt and unsupported fi
   await sendFiles(page, 'paste', ['animated.gif', 'reference.webp', 'transparent.png']);
 
   await waitForImage(page, 'oriented.jpg');
-  await expect(page.getByText('64 × 96 px')).toBeVisible();
+  await expect(page.locator('.preview-dimensions')).toHaveText('64 × 96 px');
   await expect(fileRow(page, 'broken.jpg')).toContainText('could not be decoded');
   await expect(fileRow(page, 'unsupported.txt')).toContainText('Unsupported image');
   for (const name of ['reference.heic', 'reference.avif', 'animated.gif', 'reference.webp', 'transparent.png']) {
@@ -34,7 +34,7 @@ test('intake through picker, drop, and paste isolates corrupt and unsupported fi
     await page.getByRole('button', { name: 'Next image' }).click();
   }
   await waitForImage(page, 'reference.heic');
-  await expect(page.getByText('96 × 64 px')).toBeVisible();
+  await expect(page.locator('.preview-dimensions')).toHaveText('96 × 64 px');
   if (!isMobile) await fileRow(page, 'broken.jpg').locator('.file-row').hover();
   await page.getByRole('button', { name: 'Remove broken.jpg' }).click();
   await expect(fileRow(page, 'broken.jpg')).toHaveCount(0);
