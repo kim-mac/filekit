@@ -1,17 +1,20 @@
 import { Zip, ZipPassThrough } from 'fflate';
+import type { EditCommand } from '../../core/contracts';
 import { sameBackground, type BackgroundOptions } from '../../tools/image/background-options';
 import { compositeBackground } from './background';
 import { imageTools } from '../../tools/image';
 import { defaultConvertOptions, defaultOutput, outputName, type ConvertOptions, type ImageState } from '../../tools/image/formats';
 import { fullGeometry, geometrySize, sameGeometry, scaleGeometry, type ImageGeometry, type Size } from '../../tools/image/geometry';
+import type { UpscaleQuality } from '../../tools/image/upscale-options';
+import { mapSource, projectMatte, sourceMapping, type SourceMapping } from '../upscale/matte';
 import { applyRegionBlur } from './blur';
 import { decodeImage, encodeImage } from './codecs';
 import { flatten, hasTransparency, previewMaxEdge, renderGeometry, resizePreview } from './pixels';
 import type {
-  FileFailure, ImageExport, ImageRequest, ImageStage, PreviewRequest, PreviewResult, ProgressCallback, ZipResult,
+  FileFailure, ImageExport, ImageProgress, ImageRequest, ImageStage, PreviewRequest, PreviewResult, ProgressCallback, ZipResult,
 } from './types';
 
-type ReportStage = (stage: ImageStage) => void;
+type ReportStage = (stage: ImageStage, detail?: string, tiles?: ImageProgress['tiles']) => void;
 type DecodedImage = Awaited<ReturnType<typeof decodeImage>>;
 
 interface PreviewSource {
@@ -26,10 +29,20 @@ interface PreviewSource {
   rendered?: { geometry: ImageGeometry; background?: string; edit?: BackgroundOptions; blurKey: string; blob: Blob; hasAlpha: boolean };
 }
 
+interface UpscaledRaster {
+  readonly size: Size;
+  readonly frame: ImageData;
+  readonly mapping: SourceMapping;
+  readonly quality: UpscaleQuality;
+  readonly format: DecodedImage['format'];
+}
+
 let activePreview: PreviewSource | undefined;
+let activeUpscaled: { id: string; key: string; maxEdge: number; raster: UpscaledRaster } | undefined;
 
 export function retainPreview(id: string) {
   if (activePreview?.id !== id) activePreview = undefined;
+  if (activeUpscaled?.id !== id) activeUpscaled = undefined;
 }
 
 async function decodeOriginal(original: File, report: ReportStage, normalize = true) {
@@ -115,6 +128,14 @@ async function previewRaster(source: PreviewSource, state: ImageState) {
 }
 
 export async function renderDraft({ id, commands }: Pick<ImageRequest, 'id' | 'commands'>) {
+  const upscale = upscaleProgram(commands);
+  if (upscale) {
+    const cached = activeUpscaled;
+    if (cached?.id !== id || cached.key !== upscale.key) return;
+    const { frame } = await finishUpscale(cached.raster, upscale, true, commands);
+    if (activeUpscaled !== cached) return;
+    return frame === cached.raster.frame ? new ImageData(frame.data.slice(), frame.width, frame.height) : frame;
+  }
   const source = activePreview;
   if (source?.id !== id) return;
   // Drafts are bounded by the cached preview and never overwrite it.
@@ -125,7 +146,9 @@ export async function renderDraft({ id, commands }: Pick<ImageRequest, 'id' | 'c
 }
 
 export async function renderPreview(request: PreviewRequest, progress: ProgressCallback): Promise<PreviewResult> {
-  const report: ReportStage = (stage) => progress({ id: request.id, stage, index: 1, total: 1 });
+  const report: ReportStage = (stage, detail, tiles) => progress({ id: request.id, stage, detail, tiles, index: 1, total: 1 });
+  const upscale = upscaleProgram(request.commands);
+  if (upscale) return renderUpscaledPreview(request, upscale, report);
   const source = await previewSource(request, report);
   report('Rendering preview');
   const state = await previewState(source, request.commands);
@@ -171,7 +194,110 @@ async function applyRasterEdits(frame: ImageData, original: Size, state: ImageSt
   return frame;
 }
 
+// An upscale consumes the edited raster at that point in history. Geometry
+// and region edits after it are expressed in the new pixel coordinate space.
+function upscaleProgram(commands: readonly EditCommand[]) {
+  const lastUpscale = commands.findLastIndex(({ toolId }) => toolId === 'upscale');
+  if (lastUpscale < 0) return;
+  const background = commands.findLast(({ toolId }) => toolId === 'remove-background');
+  const conversion = commands.findLast(({ toolId }) => toolId === 'convert');
+  const removeSuperseded = (command: EditCommand) =>
+    command.toolId !== 'convert' && (command.toolId !== 'remove-background' || command === background);
+  const prefix = commands.slice(0, lastUpscale + 1).filter(removeSuperseded);
+  const suffix = commands.slice(lastUpscale + 1).filter(removeSuperseded);
+  const firstUpscale = commands.findIndex(({ toolId }) => toolId === 'upscale');
+  const initialBackground = commands.slice(0, firstUpscale).findLast(({ toolId }) => toolId === 'remove-background');
+  const maxEdge = (initialBackground?.options as BackgroundOptions | undefined)?.mask?.outputMaxEdge;
+  const key = JSON.stringify([maxEdge, prefix]);
+  return { prefix, suffix, background, conversion, maxEdge, key };
+}
+
+type UpscaleProgram = NonNullable<ReturnType<typeof upscaleProgram>>;
+
+async function rasterStage(
+  frame: ImageData, size: Size, state: ImageState, mapping: SourceMapping,
+  mode: Parameters<typeof renderGeometry>[2],
+) {
+  const mapped = state.backgroundEdit
+    ? { ...state, backgroundEdit: await projectMatte(state.backgroundEdit, mapping) }
+    : state;
+  if (mode === 'preserve' && (state.blurEdits || state.backgroundEdit)) {
+    frame = new ImageData(frame.data.slice(), frame.width, frame.height);
+  }
+  await applyRasterEdits(frame, size, mapped);
+  return renderGeometry(frame, scaleGeometry(state.geometry, size, frame), mode);
+}
+
+async function upscalePrefix(
+  request: ImageRequest, program: UpscaleProgram, report: ReportStage,
+): Promise<UpscaledRaster> {
+  releaseFullPreview();
+  let { frame, format } = await decodeOriginal(request.original, report);
+  let mapping = sourceMapping;
+  let quality: UpscaleQuality | undefined;
+  let state: ImageState = { geometry: fullGeometry(frame), output: defaultOutput(format) };
+  const { runUpscale } = await import('../upscale/inference');
+  for (const command of program.prefix) {
+    state = await imageTools.get(command.toolId).apply(state, command.options);
+    if (!state.upscaleEdit) continue;
+    // Preserve the existing iOS matte cap on the original raster when
+    // background removal precedes the first upscale.
+    const size = { width: frame.width, height: frame.height };
+    if (!quality && program.maxEdge) frame = resizePreview(frame, program.maxEdge);
+    const nextMapping = mapSource(mapping, frame, scaleGeometry(state.geometry, size, frame));
+    frame = await rasterStage(frame, size, state, mapping, 'orient');
+    const result = await runUpscale(frame, state.upscaleEdit, (detail, tiles) => report('Upscaling', detail, tiles));
+    frame = result.frame;
+    quality = result.quality;
+    mapping = nextMapping;
+    state = { geometry: fullGeometry(frame), output: state.output };
+  }
+  if (!quality) throw new Error('An upscale edit is required.');
+  return { frame, size: { width: frame.width, height: frame.height }, format, mapping, quality };
+}
+
+async function finishUpscale(
+  raster: UpscaledRaster, program: UpscaleProgram, preview: boolean, commands: ImageRequest['commands'],
+) {
+  let state = await imageTools.replay({
+    geometry: fullGeometry(raster.size), output: defaultOutput(raster.format),
+  }, program.suffix);
+  if (program.conversion) state = await imageTools.get('convert').apply(state, program.conversion.options);
+  const background = program.background ? program.background.options as BackgroundOptions : undefined;
+  const output = outputForBackground(state.output, background, commands);
+  const mode = preview ? 'preserve' : output.format === 'avif' ? 'orient' : 'compact';
+  let frame = await rasterStage(raster.frame, raster.size, state, raster.mapping, mode);
+  const hasAlpha = preview && hasTransparency(frame);
+  if (hasAlpha && output.format === 'jpeg') {
+    if (frame === raster.frame) frame = new ImageData(frame.data.slice(), frame.width, frame.height);
+    flatten(frame, output.background);
+  }
+  return { frame, output, hasAlpha, geometry: state.geometry, backgroundColor: background?.color };
+}
+
+async function renderUpscaledPreview(request: PreviewRequest, program: UpscaleProgram, report: ReportStage): Promise<PreviewResult> {
+  const maxEdge = Math.max(1, Math.min(previewMaxEdge, Math.floor(request.maxEdge ?? previewMaxEdge)));
+  const { key } = program;
+  const cache = request.cache !== false;
+  if (cache) retainPreview(request.id);
+  let raster = cache && activeUpscaled?.id === request.id && activeUpscaled.key === key && activeUpscaled.maxEdge === maxEdge ? activeUpscaled.raster : undefined;
+  if (!raster) {
+    const full = await upscalePrefix(request, program, report);
+    raster = { ...full, frame: resizePreview(full.frame, maxEdge) };
+    if (cache) activeUpscaled = { id: request.id, key, maxEdge, raster };
+  }
+  report('Rendering preview');
+  const { frame, output, hasAlpha, geometry, backgroundColor } = await finishUpscale(raster, program, true, request.commands);
+  const blob = await encodePreview(frame, hasAlpha && output.format !== 'jpeg', raster.format);
+  return { blob, info: { ...geometrySize(geometry), hasAlpha, format: raster.format, output, backgroundColor, upscale: raster.quality } };
+}
+
 async function prepareExport(request: ImageRequest, report: ReportStage) {
+  const upscale = upscaleProgram(request.commands);
+  if (upscale) {
+    const raster = await upscalePrefix(request, upscale, report);
+    return finishUpscale(raster, upscale, false, request.commands);
+  }
   releaseFullPreview();
   // The matte is stored in EXIF-normalized source coordinates. Keep the
   // existing in-place EXIF/crop path for files without a background edit.
@@ -204,7 +330,7 @@ async function encodeRequest(request: ImageRequest, report: ReportStage): Promis
 }
 
 export function exportImage(request: ImageRequest, progress: ProgressCallback): Promise<ImageExport> {
-  return encodeRequest(request, (stage) => progress({ id: request.id, stage, index: 1, total: 1 }));
+  return encodeRequest(request, (stage, detail, tiles) => progress({ id: request.id, stage, detail, tiles, index: 1, total: 1 }));
 }
 
 function uniqueName(name: string, names: Set<string>) {
@@ -228,7 +354,7 @@ export async function exportZip(requests: readonly ImageRequest[], progress: Pro
   let count = 0;
 
   for (const [index, request] of requests.entries()) {
-    const report: ReportStage = (stage) => progress({ id: request.id, stage, index: index + 1, total: requests.length });
+    const report: ReportStage = (stage, detail, tiles) => progress({ id: request.id, stage, detail, tiles, index: index + 1, total: requests.length });
     let result: ImageExport;
     try {
       result = await encodeRequest(request, report);

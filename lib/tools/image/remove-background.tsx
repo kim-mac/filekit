@@ -12,11 +12,11 @@ export const removeBackgroundTool: ToolDefinition<ImageState, BackgroundOptions,
   rememberOptions: true,
   defaultOptions: defaultBackground,
   parseOptions: parseBackground,
-  OptionsPanel({ value, onChange }) {
+  OptionsPanel({ value, onChange, context }) {
     return (
       <div className="option-fields">
         {value.mask && <p>Quality mode {value.mask.tier} · {value.mask.provider === 'webgpu' ? 'WebGPU' : 'WASM'}</p>}
-        {value.mask?.outputMaxEdge && <p>Maximum output edge on this device is {value.mask.outputMaxEdge} px.</p>}
+        {value.mask?.outputMaxEdge && !context.upscale && <p>Maximum output edge on this device is {value.mask.outputMaxEdge} px.</p>}
         <fieldset>
           <legend>Background after removal</legend>
           <div className="format-options">

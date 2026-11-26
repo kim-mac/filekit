@@ -1,4 +1,5 @@
 import type { EditCommand } from '../../core/contracts';
+import type { UpscaleQuality } from '../../tools/image/upscale-options';
 import type { ConvertOptions, InputFormat } from '../../tools/image/formats';
 
 export interface ImageRequest {
@@ -18,6 +19,7 @@ export interface ImageInfo {
   readonly height: number;
   readonly hasAlpha: boolean;
   readonly backgroundColor?: string;
+  readonly upscale?: UpscaleQuality;
   readonly output: ConvertOptions;
 }
 
@@ -42,10 +44,12 @@ export interface ZipResult {
   readonly count: number;
 }
 
-export type ImageStage = 'Decoding' | 'Rendering preview' | 'Applying edits' | 'Encoding' | 'Packaging';
+export type ImageStage = 'Decoding' | 'Rendering preview' | 'Applying edits' | 'Upscaling' | 'Encoding' | 'Packaging';
 
 export interface ImageProgress {
   readonly stage: ImageStage;
+  readonly detail?: string;
+  readonly tiles?: { readonly done: number; readonly total: number };
   readonly id: string;
   readonly index: number;
   readonly total: number;

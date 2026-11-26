@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, ImagePlus, Plus, Redo2, Undo2, X } from 'lucide-react';
-import type { EditCommand } from '../../lib/core/contracts';
+import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import { activeCommands, createEditStack, recordEdit, redo, undo, type EditStack } from '../../lib/core/edit-stack';
 import { imageTools } from '../../lib/tools/image';
 import { outputFormats } from '../../lib/tools/image/formats';
@@ -54,6 +54,10 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : 'Image processing failed. Try again.';
 }
 
+function jobMessage(update: ImageProgress) {
+  return update.tiles ? `${update.detail} · Tile ${update.tiles.done} of ${update.tiles.total}` : update.detail ?? update.stage;
+}
+
 export function ImageWorkspace() {
   const [client] = useState(() => new ImageWorkerClient());
   const [entries, setEntries] = useState<readonly Entry[]>([]);
@@ -87,6 +91,23 @@ export function ImageWorkspace() {
   const renderDraft = useCallback(async (command: EditCommand) => {
     if (activeId && activeStack) {
       return client.renderDraft({ id: activeId, commands: [...activeCommands(activeStack), command] });
+    }
+  }, [activeId, activeStack, client]);
+  const preparePreview = useCallback(async (command: EditCommand, signal: AbortSignal, report: (update: ToolProgress) => void) => {
+    if (!activeId || !activeStack) throw new Error('Select an image before applying this edit.');
+    signal.throwIfAborted();
+    const abort = () => client.stop();
+    signal.addEventListener('abort', abort, { once: true });
+    try {
+      await client.run((worker, progress) => worker.renderPreview({
+        id: activeId, original: activeStack.original, commands: [...activeCommands(activeStack), command],
+      }, progress), update => report({
+        message: jobMessage(update),
+        progress: update.tiles ? 0.05 + 0.9 * update.tiles.done / update.tiles.total : update.stage === 'Rendering preview' ? 0.98 : 0.02,
+      }));
+      signal.throwIfAborted();
+    } finally {
+      signal.removeEventListener('abort', abort);
     }
   }, [activeId, activeStack, client]);
   const toolsDisabled = !previewIsCurrent || selected?.status !== 'ready' || jobsLocked || Boolean(work);
@@ -404,7 +425,7 @@ export function ImageWorkspace() {
                   original: selected.stack.original, releaseImageMemory: () => client.releaseFullPreview(),
                   backgroundColor: selectedInfo.backgroundColor,
                   hasAlpha: selectedInfo.hasAlpha, size: selectedInfo, previewUrl, previewBlob: shownPreview?.result.blob,
-                  previewTarget, renderDraft, disabled: toolsDisabled,
+                  previewTarget, renderDraft, preparePreview, upscale: selectedInfo.upscale, disabled: toolsDisabled,
                 }}
                 initialOptions={{
                   ...Object.fromEntries(activeCommands(selected.stack)
@@ -440,8 +461,8 @@ export function ImageWorkspace() {
               </div>
               <p className="job-status" role="status" aria-live="polite">
                 {exportJob
-                  ? exportProgress ? `${exportProgress.stage} ${exportProgress.index} of ${exportProgress.total}…` : 'Starting export…'
-                  : work ? `${previewProgress?.id === work.id ? previewProgress.stage : 'Checking'} ${work.stack.original.name}…` : notice}
+                  ? exportProgress ? `${jobMessage(exportProgress)}${exportProgress.detail ? ' · File' : ''} ${exportProgress.index} of ${exportProgress.total}…` : 'Starting export…'
+                  : work ? `${previewProgress?.id === work.id ? jobMessage(previewProgress) : 'Checking'} ${work.stack.original.name}…` : notice}
               </p>
               {exportJob && <button className="button secondary" onClick={() => {
                 setExportJob(undefined);

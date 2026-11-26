@@ -1,6 +1,7 @@
 import type { BackgroundOptions } from './background-options';
 import type { BlurEdit } from './blur-options';
 import type { ImageGeometry } from './geometry';
+import type { UpscaleOptions } from './upscale-options';
 
 export const outputFormats = {
   jpeg: { label: 'JPG', mime: 'image/jpeg', extension: 'jpg', lossy: true },
@@ -23,6 +24,7 @@ export interface ImageState {
   readonly backgroundEdit?: BackgroundOptions;
   readonly backgroundAfterBlur?: number;
   readonly blurEdits?: readonly BlurEdit[];
+  readonly upscaleEdit?: UpscaleOptions;
   readonly output: ConvertOptions;
 }
 

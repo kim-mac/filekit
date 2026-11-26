@@ -28,10 +28,13 @@ await build({
   plugins: [{
     name: 'shared-onnx-runtime',
     setup(builder) {
-      // The face worker uses the same ORT version as the static background
-      // runtime assets. Load the WASM-only frontend, with no inline WASM.
-      builder.onResolve({ filter: /^onnxruntime-web\/wasm$/ }, ({ importer }) =>
-        importer.endsWith('/image/faces.ts') ? { path: resolve(onnxWasm, 'ort.wasm.min.mjs') } : undefined);
+      // Use the same ORT release as the static background runtime assets.
+      // These frontends load their runtime on demand.
+      builder.onResolve({ filter: /^onnxruntime-web\/(wasm|webgpu)$/ }, ({ importer, path }) => {
+        if (!/\/(faces|inference)\.ts$/.test(importer)) return;
+        const frontend = path.split('/').at(-1);
+        return { path: resolve(onnxWasm, `ort.${frontend}.min.mjs`) };
+      });
     },
   }, {
     name: 'wasm-codec-assets',

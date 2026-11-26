@@ -20,6 +20,7 @@ export interface ToolDefinition<Input, Options, Output, Context = undefined> {
   readonly defaultOptions: Options;
   readonly rememberOptions?: boolean;
   prepareOptions?(options: Options, context: Context, signal: AbortSignal, onProgress: (update: ToolProgress) => void): Promise<Options>;
+  getApplyError?(options: Options, context: Context): string | undefined;
   parseOptions(value: unknown): Options;
   apply(input: Input, options: Options): Promise<Output>;
 }

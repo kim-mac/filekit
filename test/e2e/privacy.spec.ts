@@ -3,7 +3,7 @@ import { downloadResult, fileRow, fixtureBytes, pick, waitForImage } from './hel
 
 test.use({ serviceWorkers: 'block' });
 
-test('lazy codec and face detection assets stay same origin and files never enter HTTP requests', async ({ page, context, baseURL }) => {
+test('lazy codec, face detection, and upscale assets stay same origin and files never enter HTTP requests', async ({ page, context, baseURL }) => {
   const origin = new URL(baseURL!).origin;
   const fixtures = ['oriented.jpg', 'reference.heic', 'animated.gif', 'transparent.png', 'reference.webp', 'reference.avif', 'bg/person-urban.jpg'];
   const markers = [...fixtures.map((name) => name.split('/').at(-1)!), 'filekit-private-fixture-marker'];
@@ -59,11 +59,21 @@ test('lazy codec and face detection assets stay same origin and files never ente
   await page.getByRole('button', { name: 'Detect faces' }).click();
   await expect(page.getByText('1 face detected.', { exact: true })).toBeVisible({ timeout: 15_000 });
 
+  const upscaleChunk = /\/upscale-models\/chunks\/[a-f0-9]{64}\/0\.bin$/;
+  expect([...requests].filter(url => upscaleChunk.test(url))).toEqual([]);
+  await fileRow(page, 'oriented.jpg').getByRole('button', { name: /^oriented\.jpg/ }).click();
+  await page.getByRole('button', { name: 'Upscale', exact: true }).click();
+  await page.getByRole('radio', { name: 'Art/Text', exact: true }).check();
+  await page.getByRole('button', { name: 'Apply upscale' }).click();
+  await expect(page.getByText(/Applied with Real-ESRGAN Anime/)).toBeVisible();
+  expect((await downloadResult(page, 'Export image')).bytes.length).toBeGreaterThan(0);
+
   expect([...violations]).toEqual([]);
   expect([...requests]).toEqual(expect.arrayContaining([
     expect.stringMatching(/\/workers\/image\.worker\.js$/),
     expect.stringMatching(/\/workers\/mozjpeg_dec-.*\.wasm$/),
     expect.stringMatching(faceModel),
+    expect.stringMatching(upscaleChunk),
     expect.stringMatching(/\/bg-runtime\/onnx\/ort-wasm-simd-threaded\.wasm$/),
   ]));
 });

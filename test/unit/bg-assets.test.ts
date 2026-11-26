@@ -10,10 +10,10 @@ const manifest = { bytes: data.length, sha256, parts: [{ bytes: data.length, sha
 
 afterEach(() => vi.unstubAllGlobals());
 
-function example(networkData = data) {
+function example(networkData = data, chunkPath = path) {
   const cache = new Map<string, Response>();
   const fetcher = vi.fn(async (url: URL | string) => (
-    new URL(url).pathname === path ? new Response(networkData) : Response.json(manifest)
+    new URL(url).pathname === chunkPath ? new Response(networkData) : Response.json(manifest)
   ));
   vi.stubGlobal('location', new URL(base));
   vi.stubGlobal('fetch', fetcher);
@@ -35,6 +35,17 @@ describe('verified model chunks', () => {
     expect(await read()).toEqual(data);
     expect(await read()).toEqual(data);
     expect(fetcher.mock.calls.filter(([url]) => new URL(url).pathname === path)).toHaveLength(1);
+  });
+
+  it('requires the pinned upscale manifest and reads from its own chunk root', async () => {
+    const root = '/upscale-models';
+    const chunkPath = path.replace('/bg-models', root);
+    const { fetcher } = example(data, chunkPath);
+    await expect(assetResponse(`${root}/model.json`, undefined, { root, sha256, bytes: 1 })).rejects.toThrow('Invalid model manifest');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const response = await assetResponse(`${root}/model.json`, undefined, { root, sha256, bytes: data.length });
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(data);
+    expect(new URL(fetcher.mock.calls.at(-1)![0]).pathname).toBe(chunkPath);
   });
 
   it('rejects same-length corrupted network bytes and outside origins', async () => {

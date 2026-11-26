@@ -1,5 +1,6 @@
-import type { EditCommand } from '../../core/contracts';
+import type { EditCommand, ToolProgress } from '../../core/contracts';
 import type { Size } from './geometry';
+import type { UpscaleQuality } from './upscale-options';
 
 export interface ImageToolContext {
   readonly original: File;
@@ -9,6 +10,8 @@ export interface ImageToolContext {
   readonly size: Size;
   readonly previewUrl?: string;
   readonly previewBlob?: Blob;
+  readonly upscale?: UpscaleQuality;
+  readonly preparePreview: (command: EditCommand, signal: AbortSignal, report: (update: ToolProgress) => void) => Promise<void>;
   readonly renderDraft: (command: EditCommand) => Promise<ImageData | undefined>;
   readonly previewTarget: HTMLElement | null;
   readonly disabled: boolean;

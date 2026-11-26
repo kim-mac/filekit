@@ -26,6 +26,11 @@ export default function LicensesPage() {
       <ul>
         <li><a href="/face-models/YuNet-MIT.txt">YuNet weights · MIT</a></li>
       </ul>
+      <h2>Upscale</h2>
+      <ul>
+        <li><a href="/licenses/Real-ESRGAN-BSD-3-Clause.txt">Real-ESRGAN General and Anime · BSD-3-Clause</a></li>
+        <li><a href="/licenses/ONNX-Runtime-MIT.txt">ONNX Runtime Web · MIT</a></li>
+      </ul>
       <p><a href="/licenses/THIRD_PARTY_NOTICES.md">Third-party notices and model attribution</a></p>
       <p><a href="/licenses/ONNX-Runtime-ThirdPartyNotices.txt">ONNX Runtime third-party notices</a></p>
       <p><a href="/licenses/FileKit-MIT.txt">FileKit license</a></p>
