@@ -16,7 +16,7 @@ All three checkpoints are published by Xintao Wang's Real-ESRGAN project under i
 | Desktop WASM | Same models for consistent output. Crop first to reduce inference time on large sources. |
 | Mobile | Anime for art or text and General for photos. Both use smaller WASM tiles. Start at 2× when practical. |
 
-The app limits Upscale output to 64 MP and 16,380 px per side on desktop, and 16 MP and 8,192 px per side on mobile. The model sizes exclude the shared ONNX Runtime, downloaded on demand (13.60 MiB binary for WASM or 25.62 MiB in chunks for WebGPU). The WebGPU smoke used Chromium’s SwiftShader adapter. The 1,000 × 1,000 timing measures the desktop WASM path. [Browser timings](upscale-eval/browser-timing.json)
+The app limits Upscale output to 64 MP and 16,380 px per side on desktop, and 16 MP and 8,192 px per side on mobile. The model sizes exclude the shared ONNX Runtime, downloaded on demand (13.60 MiB binary for WASM or 25.62 MiB in chunks for WebGPU). The WebGPU smoke used Chromium’s SwiftShader adapter. On desktop Chromium WASM, 1,000 × 1,000 to 4,000 × 4,000 took 309.8 s to apply and 318.1 s to export from a fresh worker. [Browser timings](upscale-eval/browser-timing.json)
 
 ## Comparison sheets and image terms
 
