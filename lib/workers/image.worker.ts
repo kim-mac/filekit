@@ -1,5 +1,5 @@
-import { expose, releaseProxy, type Remote } from 'comlink';
-import { exportImage, exportZip, renderPreview, retainPreview, releaseFullPreview } from './image/pipeline';
+import { expose, releaseProxy, transfer, type Remote } from 'comlink';
+import { exportImage, exportZip, renderDraft, renderPreview, retainPreview, releaseFullPreview } from './image/pipeline';
 import type { ImageWorkerApi, ProgressCallback } from './image/types';
 
 function withProgress<Request, Result>(run: (request: Request, progress: ProgressCallback) => Promise<Result>) {
@@ -15,6 +15,10 @@ function withProgress<Request, Result>(run: (request: Request, progress: Progres
 const api: ImageWorkerApi = {
   retainPreview,
   releaseFullPreview,
+  async renderDraft(request) {
+    const frame = await renderDraft(request);
+    return frame && transfer(frame, [frame.data.buffer]);
+  },
   renderPreview: withProgress(renderPreview),
   exportImage: withProgress(exportImage),
   exportZip: withProgress(exportZip),

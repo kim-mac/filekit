@@ -42,7 +42,7 @@ export interface ZipResult {
   readonly count: number;
 }
 
-export type ImageStage = 'Decoding' | 'Rendering preview' | 'Encoding' | 'Packaging';
+export type ImageStage = 'Decoding' | 'Rendering preview' | 'Applying edits' | 'Encoding' | 'Packaging';
 
 export interface ImageProgress {
   readonly stage: ImageStage;
@@ -56,6 +56,7 @@ export type ProgressCallback = (progress: ImageProgress) => void;
 export interface ImageWorkerApi {
   retainPreview(id: string): void;
   releaseFullPreview(): void;
+  renderDraft(request: Pick<ImageRequest, 'id' | 'commands'>): Promise<ImageData | undefined>;
   renderPreview(request: PreviewRequest, onProgress: ProgressCallback): Promise<PreviewResult>;
   exportImage(request: ImageRequest, onProgress: ProgressCallback): Promise<ImageExport>;
   exportZip(requests: readonly ImageRequest[], onProgress: ProgressCallback): Promise<ZipResult>;

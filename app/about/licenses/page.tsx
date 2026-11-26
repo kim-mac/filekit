@@ -22,6 +22,10 @@ export default function LicensesPage() {
           <li key={name}><a href={`/licenses/${license}`}>{name} · {terms}</a></li>
         ))}
       </ul>
+      <h2>Face detection</h2>
+      <ul>
+        <li><a href="/face-models/YuNet-MIT.txt">YuNet weights · MIT</a></li>
+      </ul>
       <p><a href="/licenses/THIRD_PARTY_NOTICES.md">Third-party notices and model attribution</a></p>
       <p><a href="/licenses/ONNX-Runtime-ThirdPartyNotices.txt">ONNX Runtime third-party notices</a></p>
       <p><a href="/licenses/FileKit-MIT.txt">FileKit license</a></p>
