@@ -1,6 +1,6 @@
 # FileKit architecture
 
-FileKit is a privacy-first browser application for image, PDF, audio, and video tools. Phase 1 ships the image workspace. Phase 1a covers intake, conversion, and export. Phase 1b adds cached previews, crop, rotation, and flips. Phase 1c adds background removal.
+FileKit is a privacy-first browser application for image, PDF, audio, and video tools. Phase 1 ships the image workspace. Phase 1a covers intake, conversion, and export. Phase 1b adds cached previews, crop, rotation, and flips. Phase 1c adds background removal. The image workspace also includes Blur and Upscale.
 
 ## Folder structure
 
@@ -138,9 +138,17 @@ The Detect faces button starts a dedicated worker with a preview of the current 
 
 A disposable Comlink worker invokes the pinned bg0 library. FileKit decodes the original with its existing codecs, makes a bounded PNG for inference, and releases the original raster ahead of the bg0 session. Capable desktops choose Full on hardware WebGPU. Lite is available on WebGPU or WASM, and iOS uses bg0's dedicated quantized Lite worker. Failed Full runs fall back to Lite during inference. A tab marker enables Lite after an interrupted Full run. Canceling tears down the dedicated worker and preserves the current edit history.
 
-The desktop PNG sent to bg0 is capped at 1,600 px on the long edge and uses bg0's quality refinement. Android and iOS use smaller inference inputs and fast refinement. The stored alpha is a bounded grayscale Blob. Preview and export guide its upscale with the source RGB and unmix nearby background colors at partially transparent edges. Transparent, solid, and blurred backgrounds reuse the same matte. Desktop and Android encode the original edited pixel dimensions. iOS bounds the EXIF-normalized source to a 1,280 px long edge before replaying crop and rotation, so its output can be smaller. The control panel displays the active tier and the iOS cap.
+The desktop PNG sent to bg0 is capped at 1,600 px on the long edge and uses bg0's quality refinement. Android and iOS use smaller inference inputs and fast refinement. The stored alpha is a bounded grayscale Blob. Preview and export guide its upscale with the source RGB and unmix nearby background colors at partially transparent edges. Transparent, solid, and blurred backgrounds reuse the same matte. Desktop and Android encode the original edited pixel dimensions. For background removal on the original stage, iOS caps the EXIF-normalized source at a 1,280 px long edge before replay. The control panel displays the active tier and the applicable cap.
 
 The Cloudflare build downloads pinned weights as build inputs and publishes only same-origin assets. It splits large model and runtime assets into files below 24 MiB. The browser checks each chunk against SHA-256 before caching or use. The separately launched benchmark requires `FILEKIT_BENCH=1` and stays outside the Next export. [Integration, data sizes, and laptop testing](docs/bg0-integration.md).
+
+## Upscale
+
+Upscale records a 2× or 4× operation in the edit stack. In the worker, each upscale consumes the full-resolution raster from all earlier geometry and raster edits. The following crop, rotation and blur operations then use the scaled dimensions. Remove background keeps the latest settings and samples its original-space matte through any earlier crop, rotation and upscale. A background edit applied after Upscale uses the scaled dimensions on iOS as well. Convert still encodes only once, after replay. The worker caches a bounded preview of the latest upscale stage for subsequent edits and drafts. Export replays from the decoded original.
+
+Photo uses Real-ESRGAN General and Art/Text uses Real-ESRGAN Anime. Desktop tries hardware WebGPU, then restarts the current inference with WASM if WebGPU fails. Mobile uses smaller single-threaded WASM tiles. A tile reads its overlap plus the model's full receptive-field halo. The worker feathers RGB across neighbors into the output raster and interpolates alpha independently. The native model runs at 4×. A 2× edit averages 2×2 output samples during compositing and avoids allocating an intermediate 4× raster. Upscale caps the output at 64 MP on desktop and 16 MP on mobile. The per-side limits are 16,380 px and 8,192 px, respectively.
+
+Applying Upscale runs a tentative edit in the image worker with per-tile progress. Cancel terminates that worker and the command remains uncommitted. The model loader uses the shared verified-chunk transport and pins both the expected byte length and SHA-256 in the worker bundle. The static export serves model files as content-addressed chunks below 24 MiB and the browser re-verifies cached chunks. [Model choice and timings](docs/upscale-eval.md)
 
 ## Testing plan
 

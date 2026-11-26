@@ -21,3 +21,12 @@ FileKit passes PNG to bg0 after normalizing the source with FileKit's existing c
 | [YuNet ONNX weights](https://github.com/ShiqiYu/libfacedetection.train/blob/a61a428929148171b488f024b5d6774f93cdbc13/tasks/task1/onnx/yunet.onnx) | MIT, Shiqi Yu and upstream contributors. [Original license](https://github.com/ShiqiYu/libfacedetection.train/blob/a61a428929148171b488f024b5d6774f93cdbc13/LICENSE), [distributed copy](public/face-models/YuNet-MIT.txt). |
 
 FileKit distributes the 344,799-byte checkpoint without changes. The worker verifies SHA-256 `be449cd884ae1bc17e089b78e132e80df959b88452f32c487c6fb0a8c8e27f14` and runs inference using the bundled ONNX Runtime Web WASM runtime. FileKit’s anchor decoding follows the author’s [model configuration](https://github.com/ShiqiYu/libfacedetection.train/blob/a61a428929148171b488f024b5d6774f93cdbc13/tasks/task1/config.py) and [detector](https://github.com/ShiqiYu/libfacedetection.train/blob/a61a428929148171b488f024b5d6774f93cdbc13/tasks/task1/detect.py). The face detection test uses [Didi Medina’s CC0 portrait](test/fixtures/bg/SOURCES.md).
+
+## Image upscaling
+
+| Component | License and attribution |
+| --- | --- |
+| [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/tree/a4abfb2979a7bbff3f69f58f58ae324608821e27) | BSD-3-Clause, Copyright (c) 2021, Xintao Wang. FileKit distributes dynamic ONNX exports of the authors’ `realesr-general-x4v3` and `realesr-animevideov3` checkpoints. [License](licenses/upscale/Real-ESRGAN-BSD-3-Clause.txt) |
+| ONNX Runtime Web | MIT, Microsoft Corporation. Upscale shares the runtime and its notices listed above. |
+
+[Evaluation inputs, model provenance, and comparison sheets](docs/upscale-eval.md)

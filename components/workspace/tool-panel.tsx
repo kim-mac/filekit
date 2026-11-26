@@ -36,8 +36,9 @@ export function ToolPanel<State, Context>({
   const options = drafts[activeId] ?? initialOptions[activeId] ?? tool.defaultOptions;
 
   const busy = Boolean(progress);
+  const applyDisabled = disabled || busy || Boolean(tool.getApplyError?.(options, context));
   async function submit() {
-    if (disabled || activeJob.current) return;
+    if (applyDisabled || activeJob.current) return;
     const controller = new AbortController();
     try {
       let value = tool.parseOptions(options);
@@ -84,7 +85,7 @@ export function ToolPanel<State, Context>({
             />
           </Suspense>
         </fieldset>
-        <button className="button secondary apply" type="submit" aria-disabled={disabled || busy}>Apply {tool.name.toLowerCase()}</button>
+        <button className="button secondary apply" type="submit" aria-disabled={applyDisabled}>Apply {tool.name.toLowerCase()}</button>
         {progress && (
           <div className="option-fields">
             <p role="status">{progress.message}</p>

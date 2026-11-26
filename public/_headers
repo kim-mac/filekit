@@ -7,3 +7,7 @@
 
 /workers/faces.worker.js
   Content-Security-Policy: default-src 'self'; connect-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:
+/upscale-models/chunks/*
+  Cache-Control: public, max-age=31536000, immutable
+/workers/image.worker.js
+  Content-Security-Policy: default-src 'self'; connect-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:

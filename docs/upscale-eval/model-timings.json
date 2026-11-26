@@ -1,0 +1,56 @@
+{
+  "person": {
+    "input_size": [
+      156,
+      130
+    ],
+    "Real-ESRGAN x4plus": 5493.2,
+    "Real-ESRGAN general": 403.0,
+    "Real-ESRGAN animevideo": 230.3
+  },
+  "landscape": {
+    "input_size": [
+      164,
+      109
+    ],
+    "Real-ESRGAN x4plus": 4262.1,
+    "Real-ESRGAN general": 264.0,
+    "Real-ESRGAN animevideo": 186.4
+  },
+  "product": {
+    "input_size": [
+      164,
+      164
+    ],
+    "Real-ESRGAN x4plus": 5754.1,
+    "Real-ESRGAN general": 371.4,
+    "Real-ESRGAN animevideo": 223.7
+  },
+  "text": {
+    "input_size": [
+      166,
+      110
+    ],
+    "Real-ESRGAN x4plus": 3784.5,
+    "Real-ESRGAN general": 275.8,
+    "Real-ESRGAN animevideo": 142.9
+  },
+  "archival-jpeg": {
+    "input_size": [
+      108,
+      108
+    ],
+    "Real-ESRGAN x4plus": 2237.2,
+    "Real-ESRGAN general": 181.0,
+    "Real-ESRGAN animevideo": 104.1
+  },
+  "illustration": {
+    "input_size": [
+      164,
+      110
+    ],
+    "Real-ESRGAN x4plus": 3497.1,
+    "Real-ESRGAN general": 258.7,
+    "Real-ESRGAN animevideo": 139.4
+  }
+}

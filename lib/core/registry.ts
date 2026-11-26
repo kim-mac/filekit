@@ -20,6 +20,9 @@ export class CategoryRegistry<State, Context = undefined> {
       ...tool,
       OptionsPanel: ({ value, context, onChange }) =>
         createElement(tool.OptionsPanel, { value: tool.parseOptions(value), context, onChange }),
+      ...(tool.getApplyError ? {
+        getApplyError: (options, context) => tool.getApplyError!(tool.parseOptions(options), context),
+      } : {}),
       ...(tool.prepareOptions ? {
         prepareOptions: (options, context, signal, report) =>
           tool.prepareOptions!(tool.parseOptions(options), context, signal, report),

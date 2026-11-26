@@ -1,0 +1,26 @@
+{
+  "browser": "Chromium 156.0.8078.79",
+  "host": "Linux cloud VM, AMD EPYC 9V74, two-vCPU quota",
+  "desktopWasm": {
+    "model": "Real-ESRGAN General",
+    "input": { "width": 1000, "height": 1000 },
+    "output": { "width": 4000, "height": 4000 },
+    "tileCount": 16,
+    "applyMs": 309753,
+    "applyMeasurement": "Playwright trace from Apply upscale click to the committed 4000 × 4000 dimensions. Includes cold model and runtime loading, tiled inference, and preview rendering. Other browser tests shared the host.",
+    "exportAttempt": {
+      "elapsedMs": 345000,
+      "completedTiles": 9,
+      "status": "Timed out during the separate full-resolution replay before JPEG encoding."
+    }
+  },
+  "webgpuSmoke": {
+    "adapter": "SwiftShader software WebGPU",
+    "workerCsp": true,
+    "input": { "width": 16, "height": 17 },
+    "scale": 2,
+    "model": "Real-ESRGAN General",
+    "result": "Committed on WebGPU",
+    "forcedStartupFailure": "Committed on WASM after returning HTTP 503 for the WebGPU runtime manifest."
+  }
+}
