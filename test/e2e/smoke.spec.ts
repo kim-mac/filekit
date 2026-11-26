@@ -35,6 +35,16 @@ test('static pages and same-origin assets support shared WASM memory', async ({ 
       shared: typeof SharedArrayBuffer,
     }))).toEqual({ isolated: true, shared: 'function' });
   }
+  const workerPath = '/workers/image.worker.js';
+  const workerHeaders = (await request.get(workerPath)).headers();
+  const validators: Record<string, string> = {};
+  if (workerHeaders.etag) validators['If-None-Match'] = workerHeaders.etag;
+  if (workerHeaders['last-modified']) validators['If-Modified-Since'] = workerHeaders['last-modified'];
+  const worker = await request.get(workerPath, { headers: validators });
+  expect(worker.headers()).toMatchObject({
+    'cross-origin-embedder-policy': 'require-corp',
+    'cross-origin-resource-policy': 'same-origin',
+  });
   const font = await request.get('/fonts/InterVariable.woff2');
   expect(font.headers()).toMatchObject({ 'cross-origin-resource-policy': 'same-origin' });
   expect(await page.evaluate(async () => {
