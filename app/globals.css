@@ -1,5 +1,13 @@
 @import 'tailwindcss';
 
+@font-face {
+  font-family: Inter;
+  src: url('/fonts/InterVariable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light dark;
   --ground: #f4f5f0;
@@ -34,7 +42,7 @@
 body {
   background: var(--ground);
   color: var(--ink);
-  font-family: system-ui, sans-serif;
+  font-family: Inter, sans-serif;
 }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

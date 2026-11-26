@@ -30,3 +30,7 @@ FileKit distributes the 344,799-byte checkpoint without changes. The worker veri
 | ONNX Runtime Web | MIT, Microsoft Corporation. Upscale shares the runtime and its notices listed above. |
 
 [Evaluation inputs, model provenance, and comparison sheets](docs/upscale-eval.md)
+
+## Interface font
+
+[Inter 4.1](https://github.com/rsms/inter/tree/e3a3d4c57d5ecc01453a575621882a384c1995a3) is copyright The Inter Project Authors and distributed under the SIL Open Font License 1.1. FileKit serves the authors’ variable WOFF2 from its own origin. [License](licenses/inter/Inter-OFL.txt)

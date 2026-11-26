@@ -1,3 +1,4 @@
+import { wasmThreads } from '../wasm-threads.mjs';
 import { expose, releaseProxy, type Remote } from 'comlink';
 import { MODEL_TIER_BYTES, prepareBackgroundRemoval, removeBackground, type RemovalProgress } from '@bg0/browser';
 import { decodeImage, encodeImage } from '../image/codecs';
@@ -48,7 +49,7 @@ async function configure(request: Omit<RemovalRequest, 'original'>, ios: boolean
       wasm.wasmBinary = new Uint8Array(await (await assetResponse(`${runtime}${basename}.wasm.json`)).arrayBuffer());
     }
     wasm.wasmPaths = { mjs: `${runtime}${basename}.mjs`, wasm: `${runtime}${basename}.wasm` };
-    wasm.numThreads = 1;
+    wasm.numThreads = wasmThreads(request.mobile);
     wasm.proxy = false;
   }
 }

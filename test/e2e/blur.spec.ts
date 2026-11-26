@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { performance as timer } from 'node:perf_hooks';
 import sharp from 'sharp';
-import { downloadResult, openImageWorkspace, pick, savedLink, waitForImage } from './helpers';
+import { downloadResult, observeModelCalls, openImageWorkspace, pick, savedLink, waitForFonts, waitForImage } from './helpers';
 
 type Point = { x: number; y: number };
 type Input = { page: Page; editor: Locator; isMobile: boolean; browserName: string };
@@ -149,6 +149,7 @@ test('draws, erases, moves, resizes, deletes, and replays blur regions', async (
 });
 
 test('adds adjustable regions with the local face detector', async ({ page, isMobile }, testInfo) => {
+  const calls = await observeModelCalls(page, 'findFaces');
   const action = (control: Locator) => isMobile ? control.tap() : control.click();
   const button = (name: string) => page.getByRole('button', { name, exact: true });
   await openImageWorkspace(page);
@@ -164,6 +165,7 @@ test('adds adjustable regions with the local face detector', async ({ page, isMo
   const controls = page.getByRole('region', { name: 'Tools' });
   await expect(preview.locator('canvas')).toBeVisible();
   if (['desktop-chromium', 'android-chromium'].includes(testInfo.project.name)) {
+    await waitForFonts(page);
     await expect(preview).toHaveScreenshot('blur.png', { animations: 'disabled', maxDiffPixelRatio: 0.04 });
     await expect(controls).toHaveScreenshot('blur-controls.png', { animations: 'disabled', maxDiffPixelRatio: 0.04 });
   }
@@ -173,6 +175,9 @@ test('adds adjustable regions with the local face detector', async ({ page, isMo
   await expect(face).toBeVisible();
   await action(button('Apply blur'));
   await expect(button('Undo')).toBeEnabled();
+  expect(await calls()).toBe(1);
+  expect((await downloadResult(page, 'Export image')).bytes.length).toBeGreaterThan(0);
+  expect(await calls()).toBe(1);
 });
 
 test('times a full-image 6000×4000 Gaussian export at maximum strength', async ({ page }, testInfo) => {

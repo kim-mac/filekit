@@ -56,3 +56,20 @@ export async function downloadResult(page: Page, action: 'Export image' | 'Expor
   const path = await download.path();
   return { name: download.suggestedFilename(), bytes: await readFile(path!) };
 }
+
+export async function waitForFonts(page: Page) {
+  await page.evaluate(async () => { await document.fonts.ready; });
+}
+
+export async function observeModelCalls(page: Page, method: 'findFaces' | 'makeMask') {
+  await page.addInitScript(name => {
+    const state = window as Window & { filekitTestModelCalls?: number };
+    state.filekitTestModelCalls = 0;
+    const send = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function (message, options) {
+      if (message?.type === 'APPLY' && message.path?.[0] === name) state.filekitTestModelCalls = (state.filekitTestModelCalls ?? 0) + 1;
+      return Reflect.apply(send, this, [message, options ?? {}]);
+    };
+  }, method);
+  return () => page.evaluate(() => (window as Window & { filekitTestModelCalls?: number }).filekitTestModelCalls);
+}

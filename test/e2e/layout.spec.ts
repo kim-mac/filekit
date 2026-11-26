@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openImageWorkspace, pick, waitForImage } from './helpers';
+import { openImageWorkspace, pick, waitForFonts, waitForImage } from './helpers';
 
 test.use({ colorScheme: 'light' });
 
@@ -11,6 +11,7 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
     await expect(page.getByRole('heading', { name: category, exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: category, exact: true })).toHaveCount(0);
   }
+  await waitForFonts(page);
   const home = await page.screenshot({ path: testInfo.outputPath('home.png'), fullPage: true, animations: 'disabled' });
   await testInfo.attach('home', { body: home, contentType: 'image/png' });
   const usesSnapshots = ['desktop-chromium', 'android-chromium'].includes(testInfo.project.name);
@@ -33,6 +34,7 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(await page.evaluate(() => innerWidth));
 
+  await waitForFonts(page);
   const workspace = await page.screenshot({ path: testInfo.outputPath('workspace.png'), fullPage: true, animations: 'disabled' });
   await testInfo.attach('workspace', { body: workspace, contentType: 'image/png' });
 
@@ -51,6 +53,7 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
   await expect(cropBox).toBeVisible();
   await expect(page.getByRole('button', { name: 'Resize crop from bottom right' })).toBeVisible();
   await page.evaluate(() => scrollTo(0, 0));
+  await waitForFonts(page);
   const crop = await page.screenshot({ path: testInfo.outputPath('crop.png'), fullPage: true, animations: 'disabled' });
   await testInfo.attach('crop', { body: crop, contentType: 'image/png' });
   if (usesSnapshots) {
@@ -66,6 +69,7 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
   await page.getByRole('button', { name: 'Remove background', exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Transparent', exact: true })).toBeChecked();
   const removal = page.getByRole('region', { name: 'Tools' });
+  await waitForFonts(page);
   await testInfo.attach('background-controls', { body: await removal.screenshot(), contentType: 'image/png' });
   if (usesSnapshots) await expect(removal).toHaveScreenshot('background-controls.png', { maxDiffPixelRatio: 0.04 });
 

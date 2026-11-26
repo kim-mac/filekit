@@ -2,10 +2,12 @@ import { wrap, type Remote } from 'comlink';
 import { Eraser, Focus, Pencil, RectangleHorizontal, ScanFace, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { yuNetSha256 } from '../../workers/image/face-model';
 import type { FaceWorkerApi } from '../../workers/image/faces.worker';
 import { BlurEditor, type BlurMode } from './blur-editor';
 import { isBlurStroke, type BlurOptions, type BlurShape } from './blur-options';
 import type { ImageToolContext } from './context';
+import { isMobileDevice } from '../../core/device';
 
 const modes = [
   { id: 'brush', label: 'Brush', Icon: Pencil },
@@ -104,8 +106,12 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
     setFaceStatus('Detecting faces…');
     try {
       const interrupted = new Promise<never>((_, reject) => { rejectFace.current = reject; });
-      const faces = await Promise.race([faceApi().findFaces(previewBlob), interrupted]);
+      const { aiResults, editKey } = context;
+      const key = JSON.stringify([editKey, yuNetSha256]);
+      const faces = aiResults.faces?.key === key ? aiResults.faces.boxes
+        : await Promise.race([faceApi().findFaces(previewBlob, isMobileDevice()), interrupted]);
       if (faceRequest.current !== request || latest.current.previewBlob !== previewBlob || latest.current.disabled) return;
+      aiResults.faces = { key, boxes: faces };
       if (faces.length) {
         const regions: BlurShape[] = faces.map(bounds => ({ kind: 'rectangle', bounds }));
         const current = latest.current;

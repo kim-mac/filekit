@@ -1,4 +1,6 @@
 import { proxy, releaseProxy, wrap } from 'comlink';
+import { isMobileDevice } from '../../core/device';
+import type { ImageAIResults } from '../../tools/image/ai-results';
 import type { ToolProgress } from '../../core/contracts';
 import type { BackgroundWorkerApi, RemovalRequest } from './protocol';
 
@@ -41,7 +43,10 @@ function blockFull() {
 
 let busy = false;
 
-export async function generateBackgroundMask(original: Blob, signal: AbortSignal, report: (update: ToolProgress) => void) {
+export async function generateBackgroundMask(
+  original: Blob, results: ImageAIResults, releaseImageMemory: () => Promise<void> | undefined,
+  signal: AbortSignal, report: (update: ToolProgress) => void,
+) {
   if (busy) throw new Error('Background removal is already in progress.');
   // A graceful navigation clears the marker. A reload after a killed Full
   // process uses Lite so the same tab does not keep crashing.
@@ -49,15 +54,21 @@ export async function generateBackgroundMask(original: Blob, signal: AbortSignal
     blockFull();
     setMarker();
   }
-  const agent = navigator.userAgent;
-  const mobile = /Android|iPhone|iPad|iPod/i.test(agent) ||
-    (agent.includes('Macintosh') && navigator.maxTouchPoints > 1);
+  const mobile = isMobileDevice();
   const request: RemovalRequest = {
     original, model: mobile || cachedFailure() ? 'lite' : 'auto', mobile, touchPoints: navigator.maxTouchPoints,
   };
+  // The matte is computed from the immutable original. Background colors,
+  // fill modes and later edits all use the same source-space result.
+  const key = JSON.stringify(['bg0-0.1.2', request.model, request.mobile, request.touchPoints]);
+  if (results.background?.key === key) return results.background.mask;
   busy = true;
   try {
-    return await runBackgroundWorker(request, signal, report);
+    await releaseImageMemory();
+    const mask = await runBackgroundWorker(request, signal, report);
+    signal.throwIfAborted();
+    results.background = { key, mask };
+    return mask;
   } finally {
     busy = false;
   }

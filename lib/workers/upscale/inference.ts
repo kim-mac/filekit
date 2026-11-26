@@ -1,5 +1,6 @@
 /// <reference types="@webgpu/types" />
 
+import { wasmThreads } from '../wasm-threads.mjs';
 import type { InferenceSession } from 'onnxruntime-web';
 import type { UpscaleOptions, UpscaleQuality } from '../../tools/image/upscale-options';
 import { upscaleLimitError, upscaleSize } from '../../tools/image/upscale-options';
@@ -37,12 +38,12 @@ async function closeEngine() {
   await old?.session.release().catch(() => undefined);
 }
 
-async function openEngine(model: Model, provider: Provider, weights: ArrayBuffer, adapter?: GPUAdapter) {
+async function openEngine(model: Model, provider: Provider, weights: ArrayBuffer, mobile: boolean, adapter?: GPUAdapter) {
   const ort: Ort = provider === 'webgpu'
     ? await import('onnxruntime-web/webgpu') : await import('onnxruntime-web/wasm');
   const stem = provider === 'webgpu' ? 'ort-wasm-simd-threaded.asyncify' : 'ort-wasm-simd-threaded';
   const base = new URL(runtimeRoot, location.origin).href;
-  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.numThreads = wasmThreads(mobile);
   ort.env.wasm.proxy = false;
   ort.env.wasm.wasmPaths = { mjs: `${base}${stem}.mjs`, wasm: `${base}${stem}.wasm` };
   if (provider === 'webgpu') {
@@ -98,7 +99,7 @@ export async function runUpscale(frame: ImageData, options: UpscaleOptions, repo
       report(`Loading ${label} weights`);
       weights ??= await loadWeights(model);
       report(`Starting ${provider === 'wasm' ? 'WASM' : 'WebGPU'}`);
-      engine = await openEngine(model, provider, weights, adapter);
+      engine = await openEngine(model, provider, weights, options.mobile, adapter);
     }
     const active = engine;
     const core = options.mobile ? 112 : provider === 'wasm' ? 256 : 288;

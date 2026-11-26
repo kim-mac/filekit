@@ -5,7 +5,9 @@ import { compositeBackground } from './background';
 import { imageTools } from '../../tools/image';
 import { defaultConvertOptions, defaultOutput, outputName, type ConvertOptions, type ImageState } from '../../tools/image/formats';
 import { fullGeometry, geometrySize, sameGeometry, scaleGeometry, type ImageGeometry, type Size } from '../../tools/image/geometry';
-import type { UpscaleQuality } from '../../tools/image/upscale-options';
+import { parseUpscale, type UpscaleQuality } from '../../tools/image/upscale-options';
+import { upscaleCacheBudget } from '../upscale/cache-budget';
+import models from '../upscale/models.json';
 import { mapSource, projectMatte, sourceMapping, type SourceMapping } from '../upscale/matte';
 import { applyRegionBlur } from './blur';
 import { decodeImage, encodeImage } from './codecs';
@@ -37,12 +39,20 @@ interface UpscaledRaster {
   readonly format: DecodedImage['format'];
 }
 
+let activeFile: string | undefined;
 let activePreview: PreviewSource | undefined;
-let activeUpscaled: { id: string; key: string; maxEdge: number; raster: UpscaledRaster } | undefined;
+let activeUpscaled: {
+  key: string;
+  maxEdge: number;
+  raster: UpscaledRaster;
+  full?: UpscaledRaster;
+} | undefined;
 
 export function retainPreview(id: string) {
-  if (activePreview?.id !== id) activePreview = undefined;
-  if (activeUpscaled?.id !== id) activeUpscaled = undefined;
+  if (activeFile === id) return;
+  activeFile = id;
+  activePreview = undefined;
+  activeUpscaled = undefined;
 }
 
 async function decodeOriginal(original: File, report: ReportStage, normalize = true) {
@@ -131,7 +141,7 @@ export async function renderDraft({ id, commands }: Pick<ImageRequest, 'id' | 'c
   const upscale = upscaleProgram(commands);
   if (upscale) {
     const cached = activeUpscaled;
-    if (cached?.id !== id || cached.key !== upscale.key) return;
+    if (activeFile !== id || cached?.key !== upscale.key) return;
     const { frame } = await finishUpscale(cached.raster, upscale, true, commands);
     if (activeUpscaled !== cached) return;
     return frame === cached.raster.frame ? new ImageData(frame.data.slice(), frame.width, frame.height) : frame;
@@ -208,8 +218,10 @@ function upscaleProgram(commands: readonly EditCommand[]) {
   const firstUpscale = commands.findIndex(({ toolId }) => toolId === 'upscale');
   const initialBackground = commands.slice(0, firstUpscale).findLast(({ toolId }) => toolId === 'remove-background');
   const maxEdge = (initialBackground?.options as BackgroundOptions | undefined)?.mask?.outputMaxEdge;
-  const key = JSON.stringify([maxEdge, prefix]);
-  return { prefix, suffix, background, conversion, maxEdge, key };
+  const upscales = prefix.filter(({ toolId }) => toolId === 'upscale').map(({ options }) => parseUpscale(options));
+  const modelIds = upscales.map(({ mode }) => models[mode === 'photo' ? 'general' : 'anime'].sha256);
+  const key = JSON.stringify([maxEdge, prefix, modelIds]);
+  return { prefix, suffix, background, conversion, maxEdge, key, mobile: upscales.at(-1)!.mobile };
 }
 
 type UpscaleProgram = NonNullable<ReturnType<typeof upscaleProgram>>;
@@ -258,6 +270,7 @@ async function upscalePrefix(
 
 async function finishUpscale(
   raster: UpscaledRaster, program: UpscaleProgram, preview: boolean, commands: ImageRequest['commands'],
+  cached = preview,
 ) {
   let state = await imageTools.replay({
     geometry: fullGeometry(raster.size), output: defaultOutput(raster.format),
@@ -265,12 +278,16 @@ async function finishUpscale(
   if (program.conversion) state = await imageTools.get('convert').apply(state, program.conversion.options);
   const background = program.background ? program.background.options as BackgroundOptions : undefined;
   const output = outputForBackground(state.output, background, commands);
-  const mode = preview ? 'preserve' : output.format === 'avif' ? 'orient' : 'compact';
+  const mode = cached ? 'preserve' : output.format === 'avif' ? 'orient' : 'compact';
   let frame = await rasterStage(raster.frame, raster.size, state, raster.mapping, mode);
   const hasAlpha = preview && hasTransparency(frame);
-  if (hasAlpha && output.format === 'jpeg') {
-    if (frame === raster.frame) frame = new ImageData(frame.data.slice(), frame.width, frame.height);
-    flatten(frame, output.background);
+  // Geometry and raster effects use copies when a retained stage is shared.
+  // JPEG flattening can also mutate its input, so protect an alpha cache hit.
+  if (output.format === 'jpeg') {
+    if (cached && frame === raster.frame && (preview ? hasAlpha : hasTransparency(frame))) {
+      frame = new ImageData(frame.data.slice(), frame.width, frame.height);
+    }
+    if (hasAlpha) flatten(frame, output.background);
   }
   return { frame, output, hasAlpha, geometry: state.geometry, backgroundColor: background?.color };
 }
@@ -280,11 +297,19 @@ async function renderUpscaledPreview(request: PreviewRequest, program: UpscalePr
   const { key } = program;
   const cache = request.cache !== false;
   if (cache) retainPreview(request.id);
-  let raster = cache && activeUpscaled?.id === request.id && activeUpscaled.key === key && activeUpscaled.maxEdge === maxEdge ? activeUpscaled.raster : undefined;
+  const cached = cache && activeUpscaled?.key === key ? activeUpscaled : undefined;
+  let raster = cached?.maxEdge === maxEdge ? cached.raster : undefined;
   if (!raster) {
-    const full = await upscalePrefix(request, program, report);
+    if (cache && !cached) activeUpscaled = undefined;
+    const full = cached?.full ?? await upscalePrefix(request, program, report);
     raster = { ...full, frame: resizePreview(full.frame, maxEdge) };
-    if (cache) activeUpscaled = { id: request.id, key, maxEdge, raster };
+    const memory = (globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined)?.deviceMemory;
+    if (cache && activeFile === request.id) {
+      activeUpscaled = {
+        key, maxEdge, raster,
+        full: full.frame.data.byteLength <= upscaleCacheBudget(program.mobile, memory) ? full : undefined,
+      };
+    }
   }
   report('Rendering preview');
   const { frame, output, hasAlpha, geometry, backgroundColor } = await finishUpscale(raster, program, true, request.commands);
@@ -295,8 +320,9 @@ async function renderUpscaledPreview(request: PreviewRequest, program: UpscalePr
 async function prepareExport(request: ImageRequest, report: ReportStage) {
   const upscale = upscaleProgram(request.commands);
   if (upscale) {
-    const raster = await upscalePrefix(request, upscale, report);
-    return finishUpscale(raster, upscale, false, request.commands);
+    const cached = activeFile === request.id && activeUpscaled?.key === upscale.key ? activeUpscaled.full : undefined;
+    const raster = cached ?? await upscalePrefix(request, upscale, report);
+    return finishUpscale(raster, upscale, false, request.commands, Boolean(cached));
   }
   releaseFullPreview();
   // The matte is stored in EXIF-normalized source coordinates. Keep the

@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "npm run build:worker && next dev",
     "build": "npm run build:worker && node scripts/bg-assets.mjs --pages && next build",
-    "preview": "serve --listen tcp://127.0.0.1:4173 --no-port-switching out",
+    "preview": "serve --listen tcp://127.0.0.1:4173 --no-port-switching --no-etag --config ../serve.json out",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:all": "npm run test:unit && npm run test:e2e",

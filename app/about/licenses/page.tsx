@@ -31,6 +31,8 @@ export default function LicensesPage() {
         <li><a href="/licenses/Real-ESRGAN-BSD-3-Clause.txt">Real-ESRGAN General and Anime · BSD-3-Clause</a></li>
         <li><a href="/licenses/ONNX-Runtime-MIT.txt">ONNX Runtime Web · MIT</a></li>
       </ul>
+      <h2>Interface font</h2>
+      <p><a href="/licenses/Inter-OFL.txt">Inter · SIL Open Font License 1.1</a></p>
       <p><a href="/licenses/THIRD_PARTY_NOTICES.md">Third-party notices and model attribution</a></p>
       <p><a href="/licenses/ONNX-Runtime-ThirdPartyNotices.txt">ONNX Runtime third-party notices</a></p>
       <p><a href="/licenses/FileKit-MIT.txt">FileKit license</a></p>

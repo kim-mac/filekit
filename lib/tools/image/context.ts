@@ -1,9 +1,12 @@
 import type { EditCommand, ToolProgress } from '../../core/contracts';
+import type { ImageAIResults } from './ai-results';
 import type { Size } from './geometry';
 import type { UpscaleQuality } from './upscale-options';
 
 export interface ImageToolContext {
   readonly original: File;
+  readonly editKey: string;
+  readonly aiResults: ImageAIResults;
   readonly releaseImageMemory: () => Promise<void> | undefined;
   readonly backgroundColor?: string;
   readonly hasAlpha: boolean;

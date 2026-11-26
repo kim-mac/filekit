@@ -15,6 +15,8 @@ await build({
     'image.worker': 'lib/workers/image.worker.ts',
     'background.worker': 'lib/workers/bg0/background.worker.ts',
     'faces.worker': 'lib/workers/image/faces.worker.ts',
+    // AVIF's pthread loader imports this stable sibling URL.
+    'avif_enc_mt': require.resolve('@jsquash/avif/codec/enc/avif_enc_mt.js'),
   },
   outdir,
   bundle: true,
@@ -42,8 +44,13 @@ await build({
       // Emscripten and wasm-bindgen locate their binaries relative to the
       // original module. Keep those URLs valid after code splitting.
       builder.onLoad({ namespace: 'file', filter: /node_modules\/(@jsquash|@discourse)\/[^/]+\/codec\/.*\.(js|mjs)$/ }, async ({ path }) => {
-        const source = await readFile(path, 'utf8');
+        let source = await readFile(path, 'utf8');
         const imports = [];
+        if (path.endsWith('/avif_enc_mt.js')) {
+          const threads = resolve('lib/workers/wasm-threads.mjs');
+          imports.push(`import { wasmThreads } from ${JSON.stringify(threads)};`);
+          source = source.replace(/navigator(?:\.hardwareConcurrency|\["hardwareConcurrency"\])/g, 'wasmThreads()');
+        }
         const contents = source.replace(
           /new URL\((['"])([\w.-]+\.(?:wasm|worker\.mjs))\1,\s*import\.meta\.url\)/g,
           (_, _quote, file) => {
