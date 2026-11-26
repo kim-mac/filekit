@@ -476,8 +476,8 @@ export function ImageWorkspace() {
                   onDownload={() => startExport('image', [entry], true)} />;
               })}
               <li className="add-tile">
-                <Button variant="outline" disabled={jobsLocked} onClick={() => picker.current?.click()}>
-                  <Plus aria-hidden /> <span className="sr-only">Add more images</span>
+                <Button variant="outline" aria-label="Add more images" disabled={jobsLocked} onClick={() => picker.current?.click()}>
+                  <Plus aria-hidden />
                 </Button>
               </li>
             </ul>

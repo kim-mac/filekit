@@ -41,7 +41,7 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
     expect(output.x).toBeCloseTo(tools.x);
     expect(output.y).toBeGreaterThan(tools.y + tools.height);
   }
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(await page.evaluate(() => innerWidth));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(await page.evaluate(() => document.documentElement.clientWidth));
 
   await waitForFonts(page);
   const workspace = await page.screenshot({ path: testInfo.outputPath('workspace.png'), fullPage: true, animations: 'disabled' });

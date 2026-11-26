@@ -204,7 +204,7 @@ button, a, label { touch-action: manipulation; }
 .section-note { color: var(--muted); font-size: .79rem; line-height: 1.45; }
 .file-count { border-radius: 6px; padding: 1px 7px; background: var(--stage); font-variant-numeric: tabular-nums; }
 .file-list {
-  display: flex; gap: 9px; align-items: start; min-width: 0; overflow-x: auto;
+  position: relative; display: flex; gap: 9px; align-items: start; min-width: 0; overflow-x: auto;
   padding: 3px 3px 7px; scrollbar-width: thin; overscroll-behavior-inline: contain;
 }
 .file-tile { flex: 0 0 134px; min-width: 0; }
@@ -228,7 +228,7 @@ button, a, label { touch-action: manipulation; }
   background: var(--surface); color: var(--ink); box-shadow: 0 1px 6px rgb(0 0 0 / .17); pointer-events: auto;
 }
 .file-actions [data-slot="button"]:hover { background: var(--accent-soft); }
-@media (hover: hover) and (pointer: fine) {
+@media (min-width: 840px) and (hover: hover) and (not (any-pointer: coarse)) {
   .file-row:not(:hover):not(:focus-within) .file-actions { opacity: 0; }
   .file-row:not(:hover):not(:focus-within) .file-actions [data-slot="button"] { pointer-events: none; }
 }
@@ -299,11 +299,12 @@ button, a, label { touch-action: manipulation; }
   .privacy-long { display: none; }
   .privacy-short { display: inline; }
 }
-@media (pointer: coarse) {
+@media (width < 840px), (any-pointer: coarse) {
   .workspace [data-slot="button"]:not(.file-actions [data-slot="button"]),
   .workspace [data-slot="toggle"], .workspace [data-slot="tabs-trigger"], .workspace [data-slot="select-trigger"] { min-height: 44px; }
-  .file-actions [data-slot="button"] { min-width: 36px; min-height: 36px; }
+  .file-actions [data-slot="button"] { min-width: 44px; min-height: 44px; }
   .choice-group [data-slot="radio-group-item"] { min-height: 44px; }
+  [data-slot="select-item"] { min-height: 44px; }
 }
 @media (min-width: 640px) {
   .category-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }

@@ -96,6 +96,7 @@ test('compares an edited image with matching framing and captures each workspace
   await pick(page, 'bg/portrait-wind.jpg', 'transparent.png', 'reference.webp');
   await waitForImage(page, 'portrait-wind.jpg');
   await expect(fileRow(page, 'reference.webp')).toContainText('Ready');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(await page.evaluate(() => document.documentElement.clientWidth));
   await imageReady(page, 'Preview of portrait-wind.jpg');
   await capture('loaded');
 
