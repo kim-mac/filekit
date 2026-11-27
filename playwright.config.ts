@@ -11,8 +11,8 @@ export default defineConfig({
   snapshotPathTemplate: '{testDir}/../screenshots/{projectName}/{arg}{ext}',
   reporter: 'list',
   forbidOnly: Boolean(process.env.CI),
-  // Concurrent software-rendered WebKit sessions contend for CPU and skew frame timings.
-  workers: 1,
+  // Limit rendering contention while allowing independent browser workflows to overlap.
+  workers: 2,
   use: {
     baseURL,
     trace: 'retain-on-failure',
@@ -20,9 +20,10 @@ export default defineConfig({
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'desktop-firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'desktop-webkit', use: { ...devices['Desktop Safari'] } },
-    { name: 'iphone-webkit', use: { ...devices['iPhone 15'] } },
+    { name: 'desktop-webkit', workers: 1, use: { ...devices['Desktop Safari'] } },
     { name: 'android-chromium', use: { ...devices['Pixel 7'] } },
+    // Run only one software-rendered WebKit profile at a time. Use --no-deps for an isolated iPhone run.
+    { name: 'iphone-webkit', dependencies: ['desktop-webkit'], workers: 1, use: { ...devices['iPhone 15'] } },
   ],
   webServer: {
     command: 'npm run build && npm run preview',

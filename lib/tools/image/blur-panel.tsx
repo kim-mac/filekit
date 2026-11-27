@@ -2,7 +2,11 @@ import { Button } from '../../../components/ui/button';
 import { ChoiceGroup } from '../../../components/ui/choice-group';
 import { Slider } from '../../../components/ui/slider';
 import { Toggle } from '../../../components/ui/toggle';
-import { wrap, type Remote } from 'comlink';
+import { ModelDownloadNotice } from '../../../components/ui/model-download-notice';
+import { Notice } from '../../../components/ui/notice';
+import type { ModelDownload } from '../../core/contracts';
+import { isMemoryError, memoryRecovery } from '../../core/processing-error';
+import { proxy, wrap, type Remote } from 'comlink';
 import { Eraser, Focus, Pencil, RectangleHorizontal, ScanFace, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -33,6 +37,8 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
   const [selected, setSelected] = useState<number>();
   const [draft, setDraft] = useState<{ source: Blob; frame: ImageData }>();
   const [faceStatus, setFaceStatus] = useState('');
+  const [faceError, setFaceError] = useState('');
+  const [download, setDownload] = useState<ModelDownload>();
   const [finding, setFinding] = useState(false);
   const [draftError, setDraftError] = useState(false);
   const worker = useRef<{ instance: Worker; api: Remote<FaceWorkerApi> } | null>(null);
@@ -58,6 +64,8 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
     faceRequest.current++;
     setFinding(false);
     setFaceStatus('');
+    setFaceError('');
+    setDownload(undefined);
     setSelected(undefined);
     setDraft(undefined);
     setDraftError(false);
@@ -108,12 +116,15 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
     const request = ++faceRequest.current;
     setFinding(true);
     setFaceStatus('Detecting faces…');
+    setFaceError('');
     try {
       const interrupted = new Promise<never>((_, reject) => { rejectFace.current = reject; });
       const { aiResults, editKey } = context;
       const key = JSON.stringify([editKey, yuNetSha256]);
       const faces = aiResults.faces?.key === key ? aiResults.faces.boxes
-        : await Promise.race([faceApi().findFaces(previewBlob, isMobileDevice()), interrupted]);
+        : await Promise.race([faceApi().findFaces(previewBlob, isMobileDevice(), proxy(update => {
+          if (faceRequest.current === request) setDownload(update);
+        })), interrupted]);
       if (faceRequest.current !== request || latest.current.previewBlob !== previewBlob || latest.current.disabled) return;
       aiResults.faces = { key, boxes: faces };
       if (faces.length) {
@@ -137,11 +148,17 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
       } else {
         setFaceStatus('No faces detected.');
       }
-    } catch {
-      if (faceRequest.current === request) setFaceStatus('Face detection could not run. Try again or draw regions manually.');
+    } catch (error) {
+      if (faceRequest.current === request) {
+        setFaceStatus('');
+        setFaceError(isMemoryError(error) ? memoryRecovery : 'Face detection stopped. Try again or draw regions manually.');
+      }
     } finally {
       rejectFace.current = null;
-      if (faceRequest.current === request) setFinding(false);
+      if (faceRequest.current === request) {
+        setFinding(false);
+        setDownload(undefined);
+      }
     }
   }
 
@@ -229,8 +246,10 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
           </Button>
         )}
       </div>
-      {faceStatus && <p className="section-note" role="status">{faceStatus}</p>}
-      {hasDraft && draftError && <p className="section-note" role="status">The draft preview could not render. Apply blur to retry.</p>}
+      {download && download.loaded < download.total ? <ModelDownloadNotice download={download} />
+        : faceStatus && <p className="section-note" role="status">{faceStatus}</p>}
+      {faceError && <Notice variant="error" onDismiss={() => setFaceError('')}>{faceError}</Notice>}
+      {hasDraft && draftError && <Notice variant="error">Could not show the draft. Apply blur to try again.</Notice>}
       <p className="section-note blur-instructions" id="blur-instructions">
         <span>Drag to {mode === 'brush' ? 'paint' : mode === 'eraser' ? 'erase blur' : 'draw or adjust a shape'}.</span>
         <span>Use two fingers to pan and zoom.</span>

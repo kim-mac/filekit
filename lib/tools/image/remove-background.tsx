@@ -16,6 +16,9 @@ export const removeBackgroundTool: ToolDefinition<ImageState, BackgroundOptions,
   defaultOptions: defaultBackground,
   parseOptions: parseBackground,
   OptionsPanel: RemoveBackgroundOptionsPanel,
+  mayTakeAMinute(options, { size, original, aiResults }) {
+    return !options.mask && !aiResults.background && (size.width * size.height >= 8_000_000 || original.size >= 8_000_000);
+  },
   async prepareOptions(options, { original, aiResults, releaseImageMemory }, signal, report) {
     if (options.mask) return options;
     const { generateBackgroundMask } = await import('../../workers/bg0/client');

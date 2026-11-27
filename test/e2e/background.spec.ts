@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import sharp from 'sharp';
-import { downloadResult, fixtureBytes, observeModelCalls, openImageWorkspace, pick, waitForFonts, waitForImage, toolTab, selectFormat } from './helpers';
+import { countDownloadNotices, downloadResult, fixtureBytes, observeModelCalls, openImageWorkspace, pick, waitForFonts, waitForImage, toolTab, selectFormat } from './helpers';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -10,6 +10,7 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
     'Real Lite model is staged for Chromium with FILEKIT_BG_E2E=1');
   test.setTimeout(300_000);
   const calls = await observeModelCalls(page, 'makeMask');
+  const noticeCount = await countDownloadNotices(page);
   const origin = new URL(baseURL!).origin;
   const violations: string[] = [];
   const modelPath = 'public/bg-model-source/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/onnx/model_fp16.onnx.json';
@@ -45,6 +46,8 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   await button('Apply remove background').click();
   try {
     await expect.poll(() => chunks, { timeout: 30_000 }).toBeGreaterThan(0);
+    await expect(page.getByText(/One-time model download \(~98\.48 MB\)/)).toBeVisible();
+    await expect(page.getByRole('progressbar', { name: 'Model download progress' })).toBeVisible();
     await button('Cancel edit').click();
     await expect(page.getByText('Edit canceled.')).toBeVisible();
     await expect(button('Undo')).toBeDisabled();
@@ -104,6 +107,7 @@ test('Lite removal cancels, retries, caches weights, and replays background, cro
   await button('Apply remove background').click();
   await expect(tools.getByText(/Quality mode Lite/)).toBeVisible({ timeout: 90_000 });
   expect(chunks).toBe(firstDownloadCount);
+  expect(await noticeCount()).toBe(0);
   expect(violations).toEqual([]);
 });
 
@@ -130,9 +134,10 @@ test('iPhone WebKit uses the quantized Lite worker and shows its output cap', as
   await pick(page, 'bg/portrait-wind.jpg');
   await waitForImage(page, 'portrait-wind.jpg');
   await toolTab(page, 'Remove background').tap();
+  await expect(page.getByText('Using Lite quality on this device. For best results, use a laptop or desktop.')).toBeVisible();
   await page.getByRole('button', { name: 'Apply remove background' }).tap();
   await expect(page.getByText('Quality mode Lite · WASM')).toBeVisible({ timeout: 120_000 });
-  await expect(page.getByText('Maximum output edge on this device is 1280 px.')).toBeVisible();
+  await expect(page.getByText('The longest side of the exported image is limited to 1,280 px on this device.')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Export' }).getByLabel('Fill transparent areas with')).toHaveValue('#ffffff');
   await toolTab(page, 'Convert').tap();
   await selectFormat(page, 'PNG');

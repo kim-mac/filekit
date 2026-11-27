@@ -9,8 +9,8 @@ test('updates estimates as lossy quality and output format change', async ({ pag
   test.skip(testInfo.project.name !== 'desktop-chromium', 'Covers the full format list on desktop Chromium');
   test.setTimeout(90_000);
   await openImageWorkspace(page);
-  await pick(page, 'bg/portrait-wind.jpg');
-  await waitForImage(page, 'portrait-wind.jpg');
+  await pick(page, 'oriented.jpg');
+  await waitForImage(page, 'oriented.jpg');
   const tools = page.getByRole('region', { name: 'Tools' });
   const estimate = tools.locator('.output-estimate strong');
   const slider = tools.getByRole('slider', { name: 'Quality' });

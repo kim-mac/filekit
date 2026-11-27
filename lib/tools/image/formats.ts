@@ -1,3 +1,4 @@
+import { originalBaseName, sanitizeBaseName } from '../../core/file-name';
 import type { BackgroundOptions } from './background-options';
 import type { BlurEdit } from './blur-options';
 import type { ImageGeometry } from './geometry';
@@ -47,7 +48,14 @@ export function resolveOutput(format: InputFormat, options: ConvertOptions): Res
   return { ...options, format: options.format === 'original' ? (format === 'heic' ? 'jpeg' : format) : options.format };
 }
 
-export function outputName(input: string, format: OutputFormat): string {
-  const stem = input.replace(/\.[^.]+$/, '').replace(/[\/\\\x00-\x1f\x7f]/g, '_');
-  return `${stem || 'image'}.${outputFormats[format].extension}`;
+export function outputName(input: string, format: OutputFormat, baseName?: string): string {
+  const stem = (baseName && sanitizeBaseName(baseName)) || originalBaseName(input);
+  return `${stem}.${outputFormats[format].extension}`;
+}
+
+export function transparencyWarning(output: ResolvedOutput) {
+  const format = output.format === 'jpeg' ? 'JPG' : outputFormats[output.format].label;
+  const color = output.background.toLowerCase();
+  const fill = color === '#ffffff' ? 'white' : color === '#000000' ? 'black' : color.toUpperCase();
+  return `${format} doesn't support transparency — transparent areas will be filled with ${fill}.`;
 }

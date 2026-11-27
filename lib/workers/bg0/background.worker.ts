@@ -1,6 +1,6 @@
 import { wasmThreads } from '../wasm-threads.mjs';
 import { expose, releaseProxy, type Remote } from 'comlink';
-import { MODEL_TIER_BYTES, prepareBackgroundRemoval, removeBackground, type RemovalProgress } from '@bg0/browser';
+import { prepareBackgroundRemoval, removeBackground, type RemovalProgress } from '@bg0/browser';
 import { decodeImage, encodeImage } from '../image/codecs';
 import { flatten, resizePreview } from '../image/pixels';
 import { defaultConvertOptions } from '../../tools/image/formats';
@@ -9,7 +9,6 @@ import { assetResponse } from './asset-stream.mjs';
 
 const modelRoot = '/bg-model-source/';
 const iosModelBytes = 55_563_408;
-const mib = (bytes: number) => `${(bytes / 2 ** 20).toFixed(1)} MiB`;
 
 function isIos(touchPoints: number) {
   return /iPhone|iPod|iPad/i.test(navigator.userAgent) ||
@@ -33,7 +32,9 @@ async function configure(request: Omit<RemovalRequest, 'original'>, ios: boolean
       return Promise.reject(new Error('Background removal requires same-origin static GET requests.'));
     }
     if (url.pathname.startsWith(modelRoot) && url.pathname.endsWith('/onnx/model_fp16.onnx')) {
-      return assetResponse(`${url.pathname}.json`, req.signal);
+      return assetResponse(`${url.pathname}.json`, req.signal, undefined, (loaded, total, id) => {
+        report({ message: 'Downloading background removal model', download: { id, loaded, total } });
+      });
     }
     return fetch(req, { redirect: 'error' });
   };
@@ -61,15 +62,15 @@ async function inferenceInput(original: Blob, edge: number) {
 
 function progress(update: RemovalProgress, ios: boolean): RemovalUpdate {
   const tier = update.model === 'birefnet' ? 'Full' : update.model ? 'Lite' : undefined;
-  const bytes = ios ? iosModelBytes : tier === 'Full' ? MODEL_TIER_BYTES.full : MODEL_TIER_BYTES.lite;
-  const detail = update.stage === 'downloading'
-    ? update.download ? ` · ${mib(Math.min(bytes, update.download.loadedBytes))} / ${mib(bytes)}`
-      : ` · Model ${mib(bytes)}`
-    : '';
+  const downloading = ios && update.stage === 'downloading';
   return {
-    message: `${tier ? `${tier} · ` : ''}${update.message}${detail}`,
+    message: update.stage === 'downloading' && !ios ? 'Preparing background removal…' : update.message,
     progress: update.progress,
     full: tier === undefined ? undefined : tier === 'Full',
+    download: downloading ? {
+      id: 'background-ios-lite', total: iosModelBytes,
+      loaded: Math.round(iosModelBytes * Math.max(0, Math.min(1, (update.progress - 0.08) / 0.5))),
+    } : undefined,
   };
 }
 

@@ -154,18 +154,41 @@ diff --git a/node_modules/@bg0/browser/dist/vendor/ios/worker.mjs b/node_modules
  // Same-family BiRefNet-lite experiment. All pixels stay in this browser.
  // A worker prevents blocking the UI; it does NOT bypass the tab memory limit.
  const runtimeUrl = new URL('./ort.wasm.min.mjs', import.meta.url).href;
-@@ -53,4 +55,4 @@
+@@ -15,21 +17,12 @@
+   const bytes = new Uint8Array(MODEL_BYTES);
+   const reader = response.body.getReader();
+   let offset = 0;
+-  let reported = 0;
+-  let reportedAt = Date.now();
+   for (;;) {
+     const {done, value} = await reader.read();
+     if (done) break;
+     if (offset + value.byteLength > MODEL_BYTES) throw new Error('Unexpected model size');
+     bytes.set(value, offset);
+     offset += value.byteLength;
+-    // Report every 2% or every few seconds, so a slow but moving download
+-    // never looks hung to the page's watchdog.
+-    if (offset - reported >= MODEL_BYTES / 50 || Date.now() - reportedAt >= 5000) {
+-      reported = offset;
+-      reportedAt = Date.now();
+-      self.postMessage({stage:'loading', progress: offset / MODEL_BYTES});
+-    }
+   }
+   if (offset !== MODEL_BYTES) throw new Error('Unexpected model size');
+   return bytes;
+@@ -53,4 +46,4 @@
 -ort.env.wasm.numThreads = 1;
 +ort.env.wasm.numThreads = wasmThreads(true);
  ort.env.wasm.proxy = false;
  ort.env.wasm.wasmPaths = {
    mjs: new URL('./ort-wasm-simd-threaded.mjs', import.meta.url).href,
-@@ -60,7 +62,7 @@
+@@ -60,7 +53,7 @@
        if (session) throw new Error('Model already loaded');
        size = 512;
-       self.postMessage({stage:'loading'});
+-      self.postMessage({stage:'loading'});
 -      const response = await fetch(new URL('./int8-full-512.ort',import.meta.url));
-+      const response = await assetResponse(new URL('./int8-full-512.ort.json', import.meta.url).href);
++      const response = await assetResponse(new URL('./int8-full-512.ort.json', import.meta.url).href,
++        undefined, undefined, (loaded, total) => self.postMessage({stage:'loading', progress:loaded / total}));
        if (!response.ok) throw new Error('Model download failed');
        let bytes = await downloadModel(response);
        self.postMessage({stage:'starting'});

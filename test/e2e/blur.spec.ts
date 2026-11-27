@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { performance as timer } from 'node:perf_hooks';
 import sharp from 'sharp';
-import { downloadResult, observeModelCalls, openImageWorkspace, pick, savedLink, waitForFonts, waitForImage, toolTab, setSlider } from './helpers';
+import { countDownloadNotices, holdRequest, downloadResult, observeModelCalls, openImageWorkspace, pick, savedLink, waitForFonts, waitForImage, toolTab, setSlider } from './helpers';
 
 type Point = { x: number; y: number };
 type Input = { page: Page; editor: Locator; isMobile: boolean; browserName: string };
@@ -150,13 +150,24 @@ test('draws, erases, moves, resizes, deletes, and replays blur regions', async (
 
 test('adds adjustable regions with the local face detector', async ({ page, isMobile }, testInfo) => {
   const calls = await observeModelCalls(page, 'findFaces');
+  const verifyNotice = testInfo.project.name === 'desktop-chromium';
+  const noticeCount = verifyNotice ? await countDownloadNotices(page) : undefined;
   const action = (control: Locator) => isMobile ? control.tap() : control.click();
   const button = (name: string) => page.getByRole('button', { name, exact: true });
   await openImageWorkspace(page);
   await pick(page, 'bg/person-urban.jpg');
   await waitForImage(page, 'person-urban.jpg');
   await action(toolTab(page, 'Blur'));
-  await action(button('Detect faces'));
+  const gate = verifyNotice ? await holdRequest(page.context(), /\/face-models\/yunet\.onnx$/) : undefined;
+  try {
+    await action(button('Detect faces'));
+    if (gate) {
+      await expect(page.getByText(/One-time model download \(~0\.34 MB\)/)).toBeVisible();
+      await expect(page.getByRole('progressbar', { name: 'Model download progress' })).toBeVisible();
+    }
+  } finally {
+    await gate?.();
+  }
   await expect(page.getByText('1 face detected.', { exact: true })).toBeVisible({ timeout: 15_000 });
   const face = page.getByRole('group', { name: 'Blur rectangle 1' });
   await expect(face).toBeVisible();
@@ -178,6 +189,7 @@ test('adds adjustable regions with the local face detector', async ({ page, isMo
   expect(await calls()).toBe(1);
   expect((await downloadResult(page, 'Export image')).bytes.length).toBeGreaterThan(0);
   expect(await calls()).toBe(1);
+  if (noticeCount) expect(await noticeCount()).toBe(1);
 });
 
 test('times a full-image 6000×4000 Gaussian export at maximum strength', async ({ page }, testInfo) => {

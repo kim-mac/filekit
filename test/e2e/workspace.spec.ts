@@ -59,8 +59,8 @@ for (const [label, format, extension] of [
     await pick(page, 'transparent.png');
     await waitForImage(page, 'transparent.png');
     await expect(toolTab(page, 'Convert')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByText('Exports use the original pixels and strip EXIF metadata.')).toBeVisible();
-    await expect(outputFormat(page)).toHaveText('Keep original format');
+    await expect(page.getByText('Export uses the original pixels and removes EXIF metadata.')).toBeVisible();
+    await expect(outputFormat(page)).toHaveValue('original');
     await expect(page.getByText('Original format: PNG')).toBeVisible();
     await expect(page.getByRole('slider', { name: 'Quality' })).toHaveCount(0);
 
@@ -104,16 +104,16 @@ test('undo and redo are per file and ZIP uses each active edit history', async (
   else await page.keyboard.press('Control+z');
   await expect(page.getByText('WebP · Quality 67%')).toBeVisible();
   await page.getByRole('button', { name: 'Redo' }).click();
-  await expect(outputFormat(page)).toHaveText('PNG');
+  await expect(outputFormat(page)).toHaveValue('png');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled();
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(outputFormat(page)).toHaveText('WebP');
+  await expect(outputFormat(page)).toHaveValue('webp');
 
   await applyConversion(page, 'JPG', 92);
   await expect(page.getByRole('button', { name: 'Redo' })).toBeDisabled();
   await fileRow(page, 'transparent.png').getByRole('button', { name: /transparent.png.*Ready/ }).click();
   await waitForImage(page, 'transparent.png');
-  await expect(outputFormat(page)).toHaveText('Keep original format');
+  await expect(outputFormat(page)).toHaveValue('original');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 
   const result = await downloadResult(page, 'Export ZIP');

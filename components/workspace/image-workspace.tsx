@@ -2,18 +2,23 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, Columns2, ImagePlus, Layers, Minus, Plus, Redo2, Undo2 } from 'lucide-react';
+import { processingMessage } from '../../lib/core/processing-error';
+import { originalBaseName } from '../../lib/core/file-name';
 import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import { activeCommands, createEditStack, recordEdit, redo, undo, type EditStack } from '../../lib/core/edit-stack';
 import { imageTools } from '../../lib/tools/image';
 import type { ImageAIResults } from '../../lib/tools/image/ai-results';
 import type { Size } from '../../lib/tools/image/geometry';
-import { iconSizes, outputFormats } from '../../lib/tools/image/formats';
+import { iconSizes, outputFormats, transparencyWarning } from '../../lib/tools/image/formats';
 import { formatBytes, formatDimensions, formatIconDimensions } from '../../lib/tools/image/size-estimate';
 import { ImageWorkerClient } from '../../lib/workers/image-client';
 import type { ImageExport, ImageInfo, ImageProgress, PreviewResult } from '../../lib/workers/image/types';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { ColorField } from '../ui/color-field';
+import { ModelDownloadNotice } from '../ui/model-download-notice';
+import { Notice } from '../ui/notice';
+import { Progress } from '../ui/progress';
 import { Toggle } from '../ui/toggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { FileTile } from './file-tile';
@@ -27,6 +32,7 @@ import { useObjectUrl } from './use-object-url';
 interface Entry {
   readonly id: string;
   readonly stack: EditStack;
+  readonly baseName?: string;
   readonly status: 'pending' | 'ready' | 'paused' | 'error';
   readonly info?: ImageInfo;
   readonly error?: string;
@@ -48,12 +54,18 @@ interface ExportJob {
 
 const inputFormats = '.jpg,.jpeg,.png,.webp,.avif,.gif,.heic,.heif,image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif';
 
-function requestFor({ id, stack }: Entry) {
-  return { id, original: stack.original, commands: activeCommands(stack) };
+function requestFor({ id, stack, baseName }: Entry) {
+  return { id, original: stack.original, commands: activeCommands(stack), baseName };
 }
 
-function message(error: unknown) {
-  return error instanceof Error ? error.message : 'Image processing failed. Try again.';
+function fileExtension(entry: Entry) {
+  if (entry.info) return `.${outputFormats[entry.info.output.format].extension}`;
+  const name = entry.stack.original.name;
+  return name.lastIndexOf('.') > 0 ? name.slice(name.lastIndexOf('.')) : '';
+}
+
+function fileName(entry: Entry) {
+  return entry.baseName ? entry.baseName + fileExtension(entry) : entry.stack.original.name;
 }
 
 function jobMessage(update: ImageProgress) {
@@ -77,6 +89,14 @@ export function ImageWorkspace() {
   const [split, setSplit] = useState(50);
   const [before, setBefore] = useState<{ key: string; blob: Blob }>();
   const [notice, setNotice] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [exportWarnings, setExportWarnings] = useState<readonly string[]>([]);
+  const [dismissedWarning, setDismissedWarning] = useState('');
+  const [exportDownload, setExportDownload] = useState<ImageProgress['download']>();
+  const [fileAnnouncement, setFileAnnouncement] = useState('');
+  const [fileDrag, setFileDrag] = useState<{ id: string; target?: string }>();
+  const dragPosition = useRef<{ id: string; x: number; y: number }>(null);
+  const dragFrame = useRef(0);
   const [dragging, setDragging] = useState(false);
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const [previewTarget, setPreviewTarget] = useState<HTMLDivElement | null>(null);
@@ -105,6 +125,10 @@ export function ImageWorkspace() {
   const comparisonOriginal = selected?.stack.original;
   const beforeKey = before?.key;
   const selectedInfo = selected?.info;
+  const selectionWarning = selectedInfo?.hasAlpha && !outputFormats[selectedInfo.output.format].alpha
+    ? transparencyWarning(selectedInfo.output) : '';
+  const warnings = [...new Set([selectionWarning, ...exportWarnings].filter(Boolean))];
+  const warningKey = [selectedId, ...warnings].join('|');
   const activeId = selected?.id;
   const activeStack = selected?.stack;
   const aiResults = useMemo<ImageAIResults>(() => ({}), [activeId]);
@@ -124,6 +148,7 @@ export function ImageWorkspace() {
         id: activeId, original: activeStack.original, commands: [...activeCommands(activeStack), command],
       }, progress), update => report({
         message: jobMessage(update),
+        download: update.download,
         progress: update.tiles ? 0.05 + 0.9 * update.tiles.done / update.tiles.total : update.stage === 'Rendering preview' ? 0.98 : 0.02,
       }));
       signal.throwIfAborted();
@@ -142,7 +167,7 @@ export function ImageWorkspace() {
     }, () => {
       if (current) {
         setComparing(false);
-        setNotice('Could not show the original. Try Compare again.');
+        setExportError('Could not show the original. Try Compare again.');
       }
     });
     return () => { current = false; };
@@ -173,44 +198,55 @@ export function ImageWorkspace() {
     const tile = button.getBoundingClientRect();
     if (tile.left < visible.left) strip.scrollBy({ left: tile.left - visible.left - 5 });
     if (tile.right > visible.right) strip.scrollBy({ left: tile.right - visible.right + 5 });
-  }, [activeId]);
+  }, [activeId, selectionIndex]);
 
+  const workId = work?.id;
+  const workStack = work?.stack;
+  const workThumbnail = work?.thumbnail;
   useEffect(() => {
-    if (!work) return;
+    if (!workId || !workStack) return;
     let pending = true;
-    const request = { ...requestFor(work), cache: shouldPreviewSelection, thumbnail: !work.thumbnail };
+    const request = {
+      id: workId, original: workStack.original, commands: activeCommands(workStack),
+      cache: shouldPreviewSelection, thumbnail: !workThumbnail,
+    };
     setPreviewProgress(undefined);
     client.run((worker, progress) => worker.renderPreview(request, progress), (progress) => {
       if (pending) setPreviewProgress(progress);
     }).then((result) => {
       if (!pending) return;
       pending = false;
-      if (shouldPreviewSelection) setPreview({ id: work.id, stack: work.stack, result });
-      updateEntry(work.id, { status: 'ready', info: result.info, thumbnail: result.thumbnail ?? work.thumbnail, error: undefined });
+      if (shouldPreviewSelection) setPreview({ id: workId, stack: workStack, result });
+      updateEntry(workId, { status: 'ready', info: result.info, thumbnail: result.thumbnail ?? workThumbnail, error: undefined });
     }, (error: unknown) => {
       if (!pending) return;
       pending = false;
-      updateEntry(work.id, { status: 'error', error: message(error) });
+      updateEntry(workId, { status: 'error', error: processingMessage(error) });
     });
     return () => {
       if (!pending) return;
       pending = false;
       client.stop();
     };
-  }, [client, shouldPreviewSelection, updateEntry, work]);
+  }, [client, shouldPreviewSelection, updateEntry, workId, workStack, workThumbnail]);
 
   useEffect(() => {
     if (!exportJob) return;
     let pending = true;
     const progress = (update: ImageProgress) => {
-      if (pending) setExportProgress(update);
+      if (!pending) return;
+      setExportProgress(update);
+      if (update.download) setExportDownload(update.download);
+      else if (update.stage !== 'Upscaling') setExportDownload(undefined);
     };
-    const finish = (result: ImageExport | undefined, status: string) => {
+    const finish = (result: ImageExport | undefined, status: string, error = '') => {
       if (!pending) return;
       pending = false;
       setDownload(result);
       setDirectDownload(exportJob.direct ? result : undefined);
       setNotice(status);
+      setExportError(error);
+      setExportDownload(undefined);
       setExportJob(undefined);
       setExportProgress(undefined);
     };
@@ -219,8 +255,8 @@ export function ImageWorkspace() {
       client.run((worker, report) => worker.exportImage(requestFor(entry), report), progress).then(
         (result) => finish(result, 'Image ready to save.'),
         (error: unknown) => {
-          if (pending) updateEntry(entry.id, { exportError: message(error) });
-          finish(undefined, 'Export failed. See the file for details.');
+          if (pending) updateEntry(entry.id, { exportError: processingMessage(error) });
+          finish(undefined, '', 'Could not export this image. See the file for details.');
         },
       );
     } else {
@@ -232,10 +268,11 @@ export function ImageWorkspace() {
           const status = blob ? `ZIP ready to save with ${count} ${count === 1 ? 'image' : 'images'}.` : 'No images could be exported.';
           finish(
             blob ? { blob, name: 'filekit-images.zip' } : undefined,
-            failures.length ? `${status} ${failures.length} failed. See the files for details.` : status,
+            blob ? status : '',
+            failures.length ? `${failures.length} ${failures.length === 1 ? 'image could' : 'images could'} not be exported. See the files for details.` : '',
           );
         },
-        (error: unknown) => finish(undefined, message(error)),
+        (error: unknown) => finish(undefined, '', processingMessage(error)),
       );
     }
     return () => {
@@ -257,6 +294,8 @@ export function ImageWorkspace() {
     setSelectedId((current) => current ?? added[0].id);
     setDownload(undefined);
     setNotice('');
+    setExportError('');
+    setExportWarnings([]);
   }, [jobsLocked]);
 
   function remove(entry: Entry) {
@@ -264,8 +303,16 @@ export function ImageWorkspace() {
     setEntries(entries.filter(({ id }) => id !== entry.id));
     if (entry.id === selected?.id) setSelectedId(entries[index + 1]?.id ?? entries[index - 1]?.id);
     if (entry.id === preview?.id) setPreview(undefined);
+    const nextId = entries[index + 1]?.id ?? entries[index - 1]?.id;
+    requestAnimationFrame(() => {
+      const next = nextId && fileStrip.current?.querySelector<HTMLButtonElement>(`[data-file-id="${nextId}"] .select-file`);
+      if (next) next.focus();
+      else document.querySelector<HTMLButtonElement>('.empty-picker')?.focus();
+    });
     setDownload(undefined);
     setNotice('');
+    setExportError('');
+    setExportWarnings([]);
   }
 
   const edit = useCallback((entry: Entry, stack: EditStack) => {
@@ -273,6 +320,8 @@ export function ImageWorkspace() {
     updateEntry(entry.id, { stack, exportError: undefined });
     setDownload(undefined);
     setNotice('');
+    setExportError('');
+    setExportWarnings([]);
   }, [updateEntry]);
 
   useLayoutEffect(() => {
@@ -291,6 +340,7 @@ export function ImageWorkspace() {
       addFiles(files);
     };
     const keydown = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement | null)?.matches?.('input, textarea, [contenteditable]')) return;
       if (event.defaultPrevented || (!event.metaKey && !event.ctrlKey) || event.altKey || jobsLocked) return;
       const key = event.key.toLowerCase();
       if (key === 'o') {
@@ -313,13 +363,83 @@ export function ImageWorkspace() {
 
   function selectAdjacent(direction: number) {
     const next = entries[selectionIndex + direction];
-    if (next && !jobsLocked) setSelectedId(next.id);
+    if (next && !jobsLocked) selectFile(next.id);
   }
+
+  function selectFile(id: string) {
+    if (selected?.id !== id) setExportWarnings([]);
+    setSelectedId(id);
+  }
+
+  function renameFile(entry: Entry, baseName: string) {
+    updateEntry(entry.id, { baseName, exportError: undefined });
+    setDownload(undefined);
+    setNotice('');
+    setExportError('');
+    setExportWarnings([]);
+    setFileAnnouncement(`Renamed to ${baseName}${fileExtension(entry)}.`);
+  }
+
+  function moveFile(id: string, destination: number) {
+    const index = entries.findIndex(entry => entry.id === id);
+    if (jobsLocked || index < 0 || destination < 0 || destination >= entries.length || index === destination) return;
+    const moved = entries[index];
+    setEntries(current => {
+      const next = current.filter(entry => entry.id !== id);
+      const currentEntry = current.find(entry => entry.id === id);
+      if (!currentEntry) return current;
+      next.splice(destination, 0, currentEntry);
+      return next;
+    });
+    setDownload(undefined);
+    setNotice('');
+    setExportError('');
+    setExportWarnings([]);
+    setFileAnnouncement(`${fileName(moved)} moved to position ${destination + 1} of ${entries.length}.`);
+  }
+
+  function targetAt({ x, y }: { x: number; y: number }) {
+    return document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-file-id]')?.dataset.fileId;
+  }
+
+  function dragFile(id: string, x: number, y: number) {
+    dragPosition.current = { id, x, y };
+    if (dragFrame.current) return;
+    const update = () => {
+      dragFrame.current = 0;
+      const point = dragPosition.current;
+      const strip = fileStrip.current;
+      if (!point || !strip) return;
+      const bounds = strip.getBoundingClientRect();
+      const direction = point.x < bounds.left + 24 ? -1 : point.x > bounds.right - 24 ? 1 : 0;
+      const offset = strip.scrollLeft;
+      if (direction && point.y >= bounds.top && point.y <= bounds.bottom) strip.scrollLeft += 6 * direction;
+      const target = targetAt(point);
+      setFileDrag(previous => previous?.id === point.id && previous.target === target ? previous : { id: point.id, target });
+      if (strip.scrollLeft !== offset) dragFrame.current = requestAnimationFrame(update);
+    };
+    dragFrame.current = requestAnimationFrame(update);
+  }
+
+  function finishFileDrag(commit: boolean) {
+    const point = dragPosition.current;
+    cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = 0;
+    dragPosition.current = null;
+    setFileDrag(undefined);
+    if (commit && point) moveFile(point.id, entries.findIndex(entry => entry.id === targetAt(point)));
+  }
+
+  useEffect(() => () => cancelAnimationFrame(dragFrame.current), []);
 
   function startExport(kind: ExportJob['kind'], files: readonly Entry[], direct = false) {
     setDownload(undefined);
     setNotice('');
+    setExportError('');
+    setExportWarnings(files.flatMap(({ info }) => info?.hasAlpha && !outputFormats[info.output.format].alpha
+      ? [transparencyWarning(info.output)] : []));
     setExportProgress(undefined);
+    setExportDownload(undefined);
     setEntries((current) => current.map((entry) => (
       entry.exportError && files.some(({ id }) => id === entry.id) ? { ...entry, exportError: undefined } : entry
     )));
@@ -389,11 +509,11 @@ export function ImageWorkspace() {
               </Toggle>
             {entries.length > 1 && (
               <div className="preview-navigation">
-                <Button variant="ghost" size="icon-sm" aria-label="Previous image" disabled={selectionIndex <= 0 || jobsLocked} onClick={() => selectAdjacent(-1)}>
+                <Button variant="ghost" size="icon-sm" aria-label="Previous image" title="Previous image" disabled={selectionIndex <= 0 || jobsLocked} onClick={() => selectAdjacent(-1)}>
                   <ChevronLeft size={19} aria-hidden />
                 </Button>
                 <span>{selectionIndex + 1} / {entries.length}</span>
-                <Button variant="ghost" size="icon-sm" aria-label="Next image" disabled={selectionIndex >= entries.length - 1 || jobsLocked} onClick={() => selectAdjacent(1)}>
+                <Button variant="ghost" size="icon-sm" aria-label="Next image" title="Next image" disabled={selectionIndex >= entries.length - 1 || jobsLocked} onClick={() => selectAdjacent(1)}>
                   <ChevronRight size={19} aria-hidden />
                 </Button>
               </div>
@@ -419,7 +539,7 @@ export function ImageWorkspace() {
                 transform: viewport.view.scale === 1 && viewport.view.x === 0 && viewport.view.y === 0
                   ? undefined : `translate(${viewport.view.x}px, ${viewport.view.y}px) scale(${viewport.view.scale})`,
               }}>
-                <ImageComparison name={selected.stack.original.name} editedUrl={previewUrl} originalUrl={comparisonUrl}
+                <ImageComparison name={fileName(selected)} editedUrl={previewUrl} originalUrl={comparisonUrl}
                   width={shownPreview.result.info.width} height={shownPreview.result.info.height}
                   position={split} onPositionChange={setSplit} />
               </div>
@@ -430,7 +550,7 @@ export function ImageWorkspace() {
                 <Button variant="outline" onClick={() => updateEntry(selected.id, { status: 'pending' })}>Retry preview</Button>
               </div>
             )}
-            {selected && !previewUrl && selected.status === 'error' && <p className="preview-error">{selected.error}</p>}
+            {selected && !previewUrl && selected.status === 'error' && <p className="preview-error">Could not open image.</p>}
             {selected && !previewUrl && selected.status !== 'error' && selected.status !== 'paused' && (
               <p>Preparing image…</p>
             )}
@@ -444,9 +564,9 @@ export function ImageWorkspace() {
               <ImageDetails info={selectedInfo} />
             </div>}
             {previewUrl && <div className="zoom-controls" role="group" aria-label="Preview zoom">
-              <Button type="button" variant="ghost" size="icon-sm" aria-label="Zoom out" onClick={() => viewport.zoom(0.8)}><Minus aria-hidden /></Button>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Zoom out" title="Zoom out" onClick={() => viewport.zoom(0.8)}><Minus aria-hidden /></Button>
               <output aria-label="Zoom percentage">{viewport.percent}%</output>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label="Zoom in" onClick={() => viewport.zoom(1.25)}><Plus aria-hidden /></Button>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Zoom in" title="Zoom in" onClick={() => viewport.zoom(1.25)}><Plus aria-hidden /></Button>
               <Button type="button" variant="outline" size="sm" aria-pressed={viewport.atFit} onClick={viewport.reset}>Fit</Button>
               <Button type="button" variant="outline" size="sm" aria-pressed={viewport.atActualSize} onClick={viewport.actual}>100%</Button>
             </div>}
@@ -472,8 +592,10 @@ export function ImageWorkspace() {
         <Card className="workspace-card file-panel" role="region" aria-labelledby="files-title">
           <div className="panel-heading"><h2 id="files-title">Files</h2><span className="file-count">{entries.length}</span></div>
           {entries.length === 0 ? <p className="section-note">Added images appear here.</p> : (
-            <ul ref={fileStrip} className="file-list" aria-label="Added files">
-              {entries.map((entry) => {
+            <>
+            {entries.length > 1 && <p className="section-note">Drag thumbnails to reorder.</p>}
+            <ul ref={fileStrip} className="file-list" aria-label="Added files" tabIndex={jobsLocked ? 0 : undefined}>
+              {entries.map((entry, index) => {
                 const applying = toolBusy && entry.id === activeId;
                 const processing = applying || entry.id === exportProgress?.id || entry.id === work?.id;
                 const status = entry.id === exportProgress?.id ? exportProgress.stage
@@ -482,19 +604,26 @@ export function ImageWorkspace() {
                   : entry.exportError ? 'Export failed'
                   : entry.status === 'ready' ? 'Ready' : entry.status === 'pending' ? 'Queued'
                   : entry.status === 'paused' ? 'Canceled' : 'Could not open';
-                return <FileTile key={entry.id} name={entry.stack.original.name} thumbnail={entry.thumbnail}
+                return <FileTile key={entry.id} id={entry.id} name={fileName(entry)} thumbnail={entry.thumbnail}
+                  baseName={entry.baseName ?? originalBaseName(entry.stack.original.name)} extension={fileExtension(entry)}
+                  canMoveLeft={index > 0} canMoveRight={index < entries.length - 1}
+                  dragSource={fileDrag?.id === entry.id} dropTarget={fileDrag?.target === entry.id && fileDrag.id !== entry.id}
+                  onDrag={(x, y) => dragFile(entry.id, x, y)} onDragEnd={finishFileDrag}
+                  onMove={direction => moveFile(entry.id, index + direction)} onRename={name => renameFile(entry, name)}
                   selected={entry.id === selected?.id} processing={processing} status={status}
                   error={entry.error || entry.exportError} ready={entry.status === 'ready'} disabled={jobsLocked}
-                  onSelect={() => setSelectedId(entry.id)} onRemove={() => remove(entry)}
+                  onSelect={() => selectFile(entry.id)} onRemove={() => remove(entry)}
                   onDownload={() => startExport('image', [entry], true)} />;
               })}
               <li className="add-tile">
-                <Button variant="outline" aria-label="Add more images" disabled={jobsLocked} onClick={() => picker.current?.click()}>
+                <Button variant="outline" aria-label="Add more images" title="Add more images" disabled={jobsLocked} onClick={() => picker.current?.click()}>
                   <Plus aria-hidden />
                 </Button>
               </li>
             </ul>
+            </>
           )}
+          <p className="sr-only" role="status">{fileAnnouncement}</p>
         </Card>
 
         <aside className="workspace-sidebar" aria-label="Editing and export">
@@ -541,7 +670,12 @@ export function ImageWorkspace() {
                     toolId: 'convert', options: { ...selectedInfo.conversion, background },
                   }))} />
               )}
-              <p className="section-note">Exports use the original pixels and strip EXIF metadata.</p>
+              {warnings.length > 0 && warningKey !== dismissedWarning && (
+                <Notice variant="warning" announce={false} onDismiss={() => setDismissedWarning(warningKey)}>
+                  {warnings.map(warning => <p key={warning}>{warning}</p>)}
+                </Notice>
+              )}
+              <p className="section-note">Export uses the original pixels and removes EXIF metadata.</p>
               <div className="export-buttons">
                 <Button disabled={selected?.status !== 'ready' || !previewIsCurrent || jobsLocked}
                   onClick={() => selected && startExport('image', [selected])}>
@@ -552,14 +686,20 @@ export function ImageWorkspace() {
                   <Archive size={17} aria-hidden /> Export ZIP
                 </Button>
               </div>
+              {exportDownload && exportDownload.loaded < exportDownload.total && <ModelDownloadNotice download={exportDownload} />}
               <p className="job-status" role="status" aria-live="polite">
                 {exportJob
                   ? exportProgress ? `${jobMessage(exportProgress)}${exportProgress.detail ? ' · File' : ''} ${exportProgress.index} of ${exportProgress.total}…` : 'Starting export…'
-                  : work ? `${previewProgress?.id === work.id ? jobMessage(previewProgress) : 'Checking'} ${work.stack.original.name}…` : notice}
+                  : work ? `${previewProgress?.id === work.id ? jobMessage(previewProgress) : 'Checking'} ${fileName(work)}…` : notice}
               </p>
+              {exportError && <Notice variant="error" onDismiss={() => setExportError('')}>{exportError}</Notice>}
+              {exportJob && <Progress aria-label="Export progress" value={
+                exportProgress?.total && exportProgress.total > 1 ? 100 * (exportProgress.index - 1) / exportProgress.total : null
+              } />}
               {exportJob && <Button variant="outline" onClick={() => {
                 setExportJob(undefined);
                 setExportProgress(undefined);
+                setExportDownload(undefined);
                 setNotice('Export canceled.');
               }}>Cancel export</Button>}
               {!exportJob && work && <Button variant="outline" onClick={() => cancelPreview(work)}>Cancel preview</Button>}

@@ -1,3 +1,4 @@
+import { workerRecovery } from '../core/processing-error';
 import { proxy, releaseProxy, wrap, type Remote } from 'comlink';
 import type { ComparisonRequest, ImageRequest, ImageWorkerApi, ProgressCallback } from './image/types';
 
@@ -12,7 +13,7 @@ export class ImageWorkerClient {
     if (this.remote) return this.remote;
     const worker = new Worker(new URL('/workers/image.worker.js', window.location.origin), { type: 'module' });
     worker.addEventListener('error', () => {
-      if (this.worker === worker) this.stop(new Error('The image worker stopped. Try again.'));
+      if (this.worker === worker) this.stop(new Error(workerRecovery));
     });
     worker.addEventListener('messageerror', () => {
       if (this.worker === worker) this.stop(new Error('The image worker could not read the request. Try again.'));

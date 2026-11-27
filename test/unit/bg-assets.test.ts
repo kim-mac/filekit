@@ -31,9 +31,13 @@ describe('verified model chunks', () => {
   it('replaces corrupted cached bytes, then serves a verified cache hit', async () => {
     const { cache, fetcher } = example();
     cache.set(base + path, new Response(new Uint8Array([0, 0, 0, 0])));
-    const read = async () => new Uint8Array(await (await assetResponse('/model.json')).arrayBuffer());
+    const report = vi.fn();
+    const read = async () => new Uint8Array(await (await assetResponse('/model.json', undefined, undefined, report)).arrayBuffer());
     expect(await read()).toEqual(data);
+    expect(report.mock.calls).toEqual([[0, data.length, sha256], [data.length, data.length, sha256]]);
+    report.mockClear();
     expect(await read()).toEqual(data);
+    expect(report).not.toHaveBeenCalled();
     expect(fetcher.mock.calls.filter(([url]) => new URL(url).pathname === path)).toHaveLength(1);
   });
 

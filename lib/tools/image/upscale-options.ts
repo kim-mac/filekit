@@ -33,5 +33,5 @@ export function upscaleSize({ width, height }: Size, scale: UpscaleOptions['scal
 export function upscaleLimitError({ width, height }: Size, mobile: boolean) {
   const { pixels, edge } = upscaleLimits(mobile);
   if (width * height <= pixels && Math.max(width, height) <= edge) return;
-  return `This device supports up to ${pixels / 1_000_000} MP and ${edge.toLocaleString('en-US')} px per side. Crop the image or choose a smaller scale.`;
+  return `The requested output is too large. This device supports up to ${pixels / 1_000_000} MP and ${edge.toLocaleString('en-US')} px per side. Crop the image or choose a smaller scale.`;
 }

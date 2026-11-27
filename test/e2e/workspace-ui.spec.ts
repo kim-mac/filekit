@@ -62,7 +62,7 @@ test('selects the HEIC fallback and exports new formats through the same-origin 
   await pick(page, 'reference.heic', 'transparent.png');
   await waitForImage(page, 'reference.heic');
   await expect(page.getByText('Original format: HEIC')).toBeVisible();
-  await expect(outputFormat(page)).toHaveText('Keep original format');
+  await expect(outputFormat(page)).toHaveValue('original');
   await expect(page.getByText('HEIC input is exported as JPG.')).toBeVisible();
   expect((await downloadResult(page, 'Export image')).name).toBe('reference.jpg');
   expect(codecRequests).toBe(0);
