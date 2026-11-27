@@ -235,7 +235,7 @@ button, a, label { touch-action: manipulation; }
   padding: var(--space-1) var(--space-1) var(--space-2);
   scrollbar-width: thin; overscroll-behavior-inline: contain;
 }
-.file-tile { flex: 0 0 152px; min-width: 0; }
+.file-tile { flex: 0 0 148px; min-width: 0; }
 .file-row {
   position: relative; border: 1px solid var(--line); border-radius: 9px;
   padding: var(--space-1); background: var(--surface);
@@ -257,14 +257,24 @@ button, a, label { touch-action: manipulation; }
 .select-file small { display: flex; align-items: center; gap: 4px; padding: 0 3px 2px; font-size: var(--text-helper); color: var(--muted); font-weight: 500; }
 .select-file small.file-error { color: var(--error); }
 .file-tile > .notice { margin-top: var(--space-1); }
-.file-actions { position: absolute; inset: 8px 8px auto; display: flex; justify-content: space-between; pointer-events: none; }
-.file-actions [data-slot="button"] {
-  background: var(--surface); color: var(--ink); box-shadow: 0 1px 6px rgb(0 0 0 / .17); pointer-events: auto;
+.file-actions {
+  display: grid; grid-template-columns: repeat(2, 44px); justify-content: space-between;
+  gap: var(--space-1); padding: var(--space-1);
 }
+.file-actions [data-slot="button"] { width: 44px; height: 44px; color: var(--ink); background: var(--surface); }
 .file-actions [data-slot="button"]:hover { background: var(--accent-soft); }
 @media (hover: hover) and (not (any-pointer: coarse)) {
-  .file-row:not(:hover):not(:focus-within):not([data-menu-open]) .file-actions { opacity: 0; }
-  .file-row:not(:hover):not(:focus-within):not([data-menu-open]) .file-actions [data-slot="button"] { pointer-events: none; }
+  .file-list:not([data-touch]) .file-tile { flex-basis: 152px; }
+  .file-list:not([data-touch]) .file-actions {
+    position: absolute; inset: 8px 8px auto; display: flex; padding: 0; pointer-events: none;
+  }
+  .file-list:not([data-touch]) .file-actions [data-slot="button"] {
+    width: 32px; height: 32px; box-shadow: 0 1px 6px rgb(0 0 0 / .17); pointer-events: auto;
+  }
+  .file-list:not([data-touch]) .file-row:not(:hover):not(:focus-within):not([data-menu-open]) .file-actions { opacity: 0; }
+  .file-list:not([data-touch]) .file-row:not(:hover):not(:focus-within):not([data-menu-open]) .file-actions [data-slot="button"] {
+    pointer-events: none;
+  }
 }
 .file-rename { display: grid; gap: var(--space-1); padding: var(--space-1); font-size: var(--text-helper); }
 .file-rename-input { display: flex; gap: var(--space-1); align-items: center; min-height: 36px; color: var(--muted); }
@@ -290,9 +300,12 @@ button, a, label { touch-action: manipulation; }
 .file-spinner { animation: spin 1s linear infinite; }
 .add-tile { flex: 0 0 60px; }
 .add-tile [data-slot="button"] {
-  width: 100%; height: 116px; border-style: dashed; background: var(--surface); color: var(--accent-text);
+  width: 100%; height: 208px; border-style: dashed; background: var(--surface); color: var(--accent-text);
 }
 .add-tile [data-slot="button"]:hover { background: var(--accent-soft); }
+@media (hover: hover) and (not (any-pointer: coarse)) {
+  .file-list:not([data-touch]) .add-tile [data-slot="button"] { height: 116px; }
+}
 
 .tool-bar[data-slot="tabs-list"] {
   display: flex; flex-wrap: wrap; width: 100%; height: auto; min-height: 40px; justify-content: flex-start; gap: 3px; padding: 4px;
@@ -382,7 +395,7 @@ button, a, label { touch-action: manipulation; }
 @media (width < 840px), (any-pointer: coarse) {
   .workspace [data-slot="button"]:not(.file-actions [data-slot="button"]),
   .workspace [data-slot="toggle"], .workspace [data-slot="tabs-trigger"], .workspace [data-slot="select-trigger"] { min-height: 44px; }
-  .workspace [data-slot="button"][data-size^="icon"] { min-width: 44px; }
+  .workspace [data-slot="button"][data-size^="icon"]:not(.file-actions [data-slot="button"]) { min-width: 44px; }
   .preview-panel .panel-heading { flex-wrap: wrap; }
   .preview-controls { margin-inline-start: auto; }
   .file-rename-input { min-height: 44px; }
@@ -396,13 +409,6 @@ button, a, label { touch-action: manipulation; }
   .preview-footer .history-buttons { flex: none; }
 }
 @media (hover: none), (any-pointer: coarse) {
-  .file-tile { flex-basis: 148px; }
-  .file-actions {
-    position: static; display: grid; grid-template-columns: repeat(2, 44px);
-    justify-content: space-between; gap: var(--space-1); padding: var(--space-1);
-  }
-  .file-actions [data-slot="button"] { width: 44px; height: 44px; box-shadow: none; }
-  .add-tile [data-slot="button"] { min-height: 208px; }
   .wordmark, .license-card a { display: inline-flex; align-items: center; min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {

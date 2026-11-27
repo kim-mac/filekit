@@ -38,6 +38,9 @@ test('opens the picker from Preview and the add tile, and downloads a nonselecte
     await page.locator('h1').hover();
     await expect(firstTile.locator('.file-actions')).toHaveCSS('opacity', '0');
     await firstTile.hover();
+  } else {
+    await expect(firstTile.locator('.file-actions')).toHaveCSS('display', 'grid');
+    expect((await download.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   }
   await expect(firstTile.locator('.file-actions')).toHaveCSS('opacity', '1');
   const [output] = await Promise.all([page.waitForEvent('download'), download.click()]);

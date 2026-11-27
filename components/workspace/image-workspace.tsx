@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, Columns2, ImagePlus, Layers, Minus, Plus, Redo2, Undo2 } from 'lucide-react';
 import { processingMessage } from '../../lib/core/processing-error';
+import { isMobileDevice } from '../../lib/core/device';
 import { originalBaseName } from '../../lib/core/file-name';
 import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import { activeCommands, createEditStack, recordEdit, redo, undo, type EditStack } from '../../lib/core/edit-stack';
@@ -593,7 +594,7 @@ export function ImageWorkspace() {
           {entries.length === 0 ? <p className="section-note">Added images appear here.</p> : (
             <>
             {entries.length > 1 && <p className="section-note">Drag thumbnails to reorder.</p>}
-            <ul ref={fileStrip} className="file-list" aria-label="Added files" tabIndex={jobsLocked ? 0 : undefined}>
+            <ul ref={fileStrip} className="file-list" aria-label="Added files" data-touch={isMobileDevice() || undefined} tabIndex={jobsLocked ? 0 : undefined}>
               {entries.map((entry, index) => {
                 const applying = toolBusy && entry.id === activeId;
                 const processing = applying || entry.id === exportProgress?.id || entry.id === work?.id;
