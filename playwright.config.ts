@@ -20,9 +20,15 @@ export default defineConfig({
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'desktop-firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'desktop-webkit', workers: 1, use: { ...devices['Desktop Safari'] } },
     { name: 'android-chromium', use: { ...devices['Pixel 7'] } },
-    // Run only one software-rendered WebKit profile at a time. Use --no-deps for an isolated iPhone run.
+    // WebKit renders in software on Linux. Run both profiles in exclusive phases to keep frame timings stable.
+    // Use --no-deps to run an individual WebKit profile.
+    {
+      name: 'desktop-webkit',
+      dependencies: ['desktop-chromium', 'desktop-firefox', 'android-chromium'],
+      workers: 1,
+      use: { ...devices['Desktop Safari'] },
+    },
     { name: 'iphone-webkit', dependencies: ['desktop-webkit'], workers: 1, use: { ...devices['iPhone 15'] } },
   ],
   webServer: {

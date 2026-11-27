@@ -386,6 +386,7 @@ button, a, label { touch-action: manipulation; }
   .preview-panel .panel-heading { flex-wrap: wrap; }
   .preview-controls { margin-inline-start: auto; }
   .file-rename-input { min-height: 44px; }
+  .file-rename-input input { font-size: 1rem; }
   .file-menu [role="menuitem"] { min-height: 44px; }
   .workspace [data-slot="slider-thumb"] { min-width: 44px; min-height: 44px; }
   .color-value input { width: 44px; height: 44px; }

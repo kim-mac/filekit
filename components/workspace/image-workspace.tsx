@@ -91,7 +91,7 @@ export function ImageWorkspace() {
   const [notice, setNotice] = useState('');
   const [exportError, setExportError] = useState('');
   const [exportWarnings, setExportWarnings] = useState<readonly string[]>([]);
-  const [dismissedWarning, setDismissedWarning] = useState('');
+  const [dismissedWarnings, setDismissedWarnings] = useState<ReadonlySet<string>>(() => new Set());
   const [exportDownload, setExportDownload] = useState<ImageProgress['download']>();
   const [fileAnnouncement, setFileAnnouncement] = useState('');
   const [fileDrag, setFileDrag] = useState<{ id: string; target?: string }>();
@@ -127,8 +127,7 @@ export function ImageWorkspace() {
   const selectedInfo = selected?.info;
   const selectionWarning = selectedInfo?.hasAlpha && !outputFormats[selectedInfo.output.format].alpha
     ? transparencyWarning(selectedInfo.output) : '';
-  const warnings = [...new Set([selectionWarning, ...exportWarnings].filter(Boolean))];
-  const warningKey = [selectedId, ...warnings].join('|');
+  const warnings = [...new Set([selectionWarning, ...exportWarnings])].filter(warning => warning && !dismissedWarnings.has(warning));
   const activeId = selected?.id;
   const activeStack = selected?.stack;
   const aiResults = useMemo<ImageAIResults>(() => ({}), [activeId]);
@@ -670,8 +669,9 @@ export function ImageWorkspace() {
                     toolId: 'convert', options: { ...selectedInfo.conversion, background },
                   }))} />
               )}
-              {warnings.length > 0 && warningKey !== dismissedWarning && (
-                <Notice variant="warning" announce={false} onDismiss={() => setDismissedWarning(warningKey)}>
+              {warnings.length > 0 && (
+                <Notice variant="warning" announce={false}
+                  onDismiss={() => setDismissedWarnings(previous => new Set([...previous, ...warnings]))}>
                   {warnings.map(warning => <p key={warning}>{warning}</p>)}
                 </Notice>
               )}
