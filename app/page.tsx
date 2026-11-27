@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { ArrowUpRight, AudioLines, FileText, Image, ShieldCheck, Video } from 'lucide-react';
+import { ArrowUpRight, AudioLines, FileText, Image, Layers, ShieldCheck, Video } from 'lucide-react';
 import { categories } from '../lib/core/categories';
+import { Card } from '../components/ui/card';
 
 const icons = { image: Image, pdf: FileText, audio: AudioLines, video: Video };
 
@@ -9,7 +10,7 @@ export default function HomePage() {
     <>
       <header className="site-header">
         <div className="site-bar">
-          <Link href="/" prefetch={false} className="wordmark" aria-label="FileKit home">File<span>Kit</span></Link>
+          <Link href="/" prefetch={false} className="wordmark" aria-label="FileKit home"><Layers className="brand-icon" size={20} aria-hidden />FileKit</Link>
           <span className="privacy"><ShieldCheck size={17} aria-hidden /> Private by design</span>
         </div>
       </header>
@@ -32,9 +33,9 @@ export default function HomePage() {
               </>
             );
             return href ? (
-              <Link key={id} href={href} prefetch={false} className="category-card category-active">{content}</Link>
+              <Link key={id} href={href} prefetch={false} className="category-active"><Card className="category-card">{content}</Card></Link>
             ) : (
-              <article key={id} className="category-card">{content}</article>
+              <Card key={id} className="category-card">{content}</Card>
             );
           })}
         </section>

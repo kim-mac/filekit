@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { isBlurStroke, type BlurPoint, type BlurRegion, type BlurShape, type BlurStroke } from './blur-options';
 import type { Bounds, Size } from './geometry';
+import { framePoint } from './preview-view';
 
 export type BlurMode = BlurRegion['kind'];
-type Transform = { scale: number; x: number; y: number };
 type Drag = {
   readonly id: number;
   readonly origin: BlurPoint;
@@ -12,7 +12,6 @@ type Drag = {
   readonly original: BlurRegion;
   current: BlurRegion;
 };
-const fit = { scale: 1, x: 0, y: 0 };
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
 function boundsBetween(a: BlurPoint, b: BlurPoint): Bounds {
@@ -65,13 +64,9 @@ function StrokeGuide({ stroke, size }: { stroke: BlurStroke; size: Size }) {
 }
 
 export function BlurEditor({ regions, src, size, draft, disabled, mode, diameter, selected, onSelect, onCommit }: Props) {
-  const surface = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const touches = useRef(new Map<number, BlurPoint>());
-  const pinch = useRef<{ center: BlurPoint; distance: number; transform: Transform } | null>(null);
   const drag = useRef<Drag | null>(null);
-  const [transform, setTransform] = useState(fit);
   const [gesture, setGesture] = useState<{ region: BlurRegion; index?: number }>();
   const [hover, setHover] = useState<BlurPoint>();
   const painting = mode === 'brush' || mode === 'eraser';
@@ -80,19 +75,6 @@ export function BlurEditor({ regions, src, size, draft, disabled, mode, diameter
     if (draft && canvas.current) canvas.current.getContext('2d')?.putImageData(draft, 0, 0);
   }, [draft]);
 
-  function position(event: PointerEvent, box: DOMRect): BlurPoint {
-    return { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height };
-  }
-
-  function pinchPosition() {
-    const [a, b] = touches.current.values();
-    const box = surface.current!.getBoundingClientRect();
-    return {
-      center: { x: (a.x + b.x - box.left - box.right) / 2, y: (a.y + b.y - box.top - box.bottom) / 2 },
-      distance: Math.hypot(a.x - b.x, a.y - b.y),
-    };
-  }
-
   function cancelDrawing() {
     drag.current = null;
     setGesture(undefined);
@@ -100,18 +82,8 @@ export function BlurEditor({ regions, src, size, draft, disabled, mode, diameter
 
   function start(event: PointerEvent<HTMLDivElement>) {
     event.stopPropagation();
-    if (disabled || event.button !== 0 || !frame.current) return;
-    if (event.pointerType === 'touch') {
-      touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      event.currentTarget.setPointerCapture(event.pointerId);
-      if (touches.current.size > 1) {
-        cancelDrawing();
-        if (touches.current.size === 2) pinch.current = { ...pinchPosition(), transform };
-        return;
-      }
-    } else if (drag.current) return;
-
-    const point = position(event, frame.current.getBoundingClientRect());
+    if (disabled || event.button !== 0 || drag.current || !frame.current) return;
+    const point = framePoint({ x: event.clientX, y: event.clientY }, frame.current.getBoundingClientRect());
     const target = event.target instanceof Element ? event.target : undefined;
     const hit = painting ? undefined : target?.closest<HTMLElement>('[data-blur-shape]');
     const index = hit ? Number(hit.dataset.blurShape) : undefined;
@@ -121,8 +93,8 @@ export function BlurEditor({ regions, src, size, draft, disabled, mode, diameter
     if (event.pointerType !== 'touch') {
       event.preventDefault();
       (hit ?? event.currentTarget).focus({ preventScroll: true });
-      event.currentTarget.setPointerCapture(event.pointerId);
     }
+    if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId);
     onSelect(index);
     const handle = target?.closest<HTMLElement>('[data-handle]')?.dataset.handle as Drag['handle'];
     const region = existing ?? (painting
@@ -134,26 +106,8 @@ export function BlurEditor({ regions, src, size, draft, disabled, mode, diameter
 
   function move(event: PointerEvent<HTMLDivElement>) {
     if (disabled || !frame.current) return;
-    if (touches.current.has(event.pointerId)) {
-      touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    }
-    if (pinch.current) {
-      if (touches.current.size < 2) return;
-      const start = pinch.current;
-      const { distance, center } = pinchPosition();
-      const scale = clamp(start.transform.scale * distance / Math.max(1, start.distance), 1, 5);
-      const ratio = scale / start.transform.scale;
-      const limitX = frame.current.offsetWidth * (scale - 1) / 2;
-      const limitY = frame.current.offsetHeight * (scale - 1) / 2;
-      setTransform({
-        scale,
-        x: clamp(center.x + (start.transform.x - start.center.x) * ratio, -limitX, limitX),
-        y: clamp(center.y + (start.transform.y - start.center.y) * ratio, -limitY, limitY),
-      });
-      return;
-    }
     const box = frame.current.getBoundingClientRect();
-    const raw = position(event, box);
+    const raw = framePoint({ x: event.clientX, y: event.clientY }, box);
     const point = { x: clamp(raw.x), y: clamp(raw.y) };
     if (event.pointerType === 'mouse' && painting) {
       setHover(raw.x === point.x && raw.y === point.y ? point : undefined);
@@ -176,8 +130,6 @@ export function BlurEditor({ regions, src, size, draft, disabled, mode, diameter
     event.stopPropagation();
     const active = drag.current;
     if (event.type === 'pointerup' && active?.id === event.pointerId) move(event);
-    touches.current.delete(event.pointerId);
-    if (!touches.current.size) pinch.current = null;
     if (!active || active.id !== event.pointerId) return;
     cancelDrawing();
     if (event.type !== 'pointerup' || disabled) return;
@@ -208,13 +160,12 @@ export function BlurEditor({ regions, src, size, draft, disabled, mode, diameter
   }
 
   return (
-    <div ref={surface} className={`blur-editor ${painting ? 'painting' : ''}`} tabIndex={disabled ? -1 : 0}
+    <div className={`blur-editor ${painting ? 'painting' : ''}`} tabIndex={disabled ? -1 : 0}
       role="group" aria-label="Blur editor" aria-describedby="blur-instructions" aria-disabled={disabled}
-      data-zoom={transform.scale} onPointerDown={start} onPointerMove={move} onPointerUp={finish}
+      onPointerDown={start} onPointerMove={move} onPointerUp={finish}
       onPointerCancel={finish} onLostPointerCapture={finish} onPointerLeave={() => setHover(undefined)}>
       <div ref={frame} className="blur-frame" style={{
         aspectRatio: size.width / size.height, width: `min(100cqw, ${100 * size.width / size.height}cqh)`,
-        transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
       }}>
         {/* The source is a local preview Blob. */}
         <img className="blur-source" src={src} alt="" draggable={false} hidden={Boolean(draft)} />

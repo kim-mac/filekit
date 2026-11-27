@@ -1,7 +1,8 @@
-import { outputFormats, type ConvertOptions } from '../../tools/image/formats';
+import { outputFormats, type ResolvedOutput } from '../../tools/image/formats';
 import { isOrientation } from '../../tools/image/geometry';
 import { detectFormat, firstWebpFrame, hasContainerOrientation } from './headers';
-import { flatten, orient } from './pixels';
+import { imageDetails, pngProfile, readImageTags } from './metadata';
+import { flatten, hasTransparency, orient } from './pixels';
 
 const decoders = {
   jpeg: () => import('@jsquash/jpeg/decode.js'),
@@ -26,18 +27,7 @@ async function decodeWebp(buffer: ArrayBuffer): Promise<ImageData> {
   return canvas;
 }
 
-async function readOrientation(input: ArrayBuffer): Promise<number> {
-  try {
-    const { load } = await import('exifreader');
-    const { exif } = load(input, { expanded: true, includeTags: { exif: ['Orientation'] } });
-    return exif?.Orientation?.value ?? 1;
-  } catch {
-    // Unreadable metadata can coexist with valid image pixels.
-    return 1;
-  }
-}
-
-export async function decodeImage(original: Blob, normalize = true) {
+export async function decodeImage(original: Blob, normalize = true, includeDetails = false) {
   const buffer = await original.arrayBuffer();
   const format = detectFormat(buffer);
   const containerOriented = (format === 'heic' || format === 'avif') && hasContainerOrientation(buffer);
@@ -53,12 +43,14 @@ export async function decodeImage(original: Blob, normalize = true) {
   }
   if (!frame) throw new Error('The decoder returned no image.');
 
-  const tag = !containerOriented && format !== 'gif' ? await readOrientation(buffer) : 1;
+  const tags = includeDetails || (!containerOriented && format !== 'gif') ? await readImageTags(buffer, includeDetails) : {};
+  const tag = !containerOriented && format !== 'gif' ? tags.exif?.Orientation?.value : 1;
   const orientation = isOrientation(tag) ? tag : 1;
-  return { frame: normalize ? orient(frame, orientation) : frame, format, orientation };
+  const details = includeDetails ? imageDetails(format, tags, hasTransparency(frame), format === 'png' ? pngProfile(buffer) : undefined) : undefined;
+  return { frame: normalize ? orient(frame, orientation) : frame, format, orientation, details };
 }
 
-export async function encodeImage(frame: ImageData, options: ConvertOptions): Promise<Blob> {
+export async function encodeImage(frame: ImageData, options: ResolvedOutput): Promise<Blob> {
   const { format, quality, background } = options;
   let bytes: ArrayBuffer;
   switch (format) {
@@ -88,6 +80,13 @@ export async function encodeImage(frame: ImageData, options: ConvertOptions): Pr
       const { default: encode } = await import('@jsquash/avif/encode.js');
       bytes = await encode(frame, { quality, qualityAlpha: 100 });
       break;
+    }
+    case 'bmp':
+    case 'gif':
+    case 'tiff':
+    case 'ico': {
+      const { encodeExtended } = await import('./extended-codecs');
+      return encodeExtended(format === 'bmp' ? flatten(frame, background) : frame, { ...options, format });
     }
   }
   return new Blob([bytes], { type: outputFormats[format].mime });

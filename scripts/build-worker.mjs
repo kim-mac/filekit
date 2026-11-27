@@ -1,6 +1,6 @@
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
-import { readFile, rm } from 'node:fs/promises';
+import { copyFile, readFile, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
@@ -13,6 +13,7 @@ await rm(outdir, { recursive: true, force: true });
 await build({
   entryPoints: {
     'image.worker': 'lib/workers/image.worker.ts',
+    'size-estimate.worker': 'lib/workers/image/size-estimate.worker.ts',
     'background.worker': 'lib/workers/bg0/background.worker.ts',
     'faces.worker': 'lib/workers/image/faces.worker.ts',
     // AVIF's pthread loader imports this stable sibling URL.
@@ -72,3 +73,5 @@ await build({
     },
   }],
 });
+
+await copyFile(require.resolve('@imagemagick/magick-wasm/magick.wasm'), `${outdir}/magick.wasm`);

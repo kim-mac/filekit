@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ToolDefinition } from '../../lib/core/contracts';
 import { CategoryRegistry } from '../../lib/core/registry';
 import { convertTool } from '../../lib/tools/image/convert';
-import { defaultOutput, outputName } from '../../lib/tools/image/formats';
+import { keepOriginalOptions, outputName } from '../../lib/tools/image/formats';
 import { fullGeometry } from '../../lib/tools/image/geometry';
 import { imageTools } from '../../lib/tools/image';
 
@@ -55,12 +55,12 @@ describe('Convert plugin', () => {
   it('changes only the export settings', async () => {
     expect(imageTools.list().map(({ id }) => id)).toEqual(['convert', 'crop', 'blur', 'remove-background', 'upscale']);
     const geometry = fullGeometry({ width: 2, height: 3 });
-    const input = { geometry, output: defaultOutput('heic') };
+    const input = { geometry, output: keepOriginalOptions };
     const options = { format: 'jpeg', quality: 52, background: '#000000' };
     const result = await imageTools.replay(input, [{ toolId: 'convert', options }]);
     expect(result.geometry).toBe(geometry);
     expect(result.output).toEqual(options);
-    expect(input.output).toEqual({ format: 'png', quality: 85, background: '#ffffff' });
+    expect(input.output).toEqual({ format: 'original', quality: 85, background: '#ffffff' });
   });
 
   it.each([

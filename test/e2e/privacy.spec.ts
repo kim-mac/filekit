@@ -1,11 +1,14 @@
 import { expect, test, type Request } from '@playwright/test';
-import { downloadResult, fileRow, fixtureBytes, pick, waitForImage } from './helpers';
+import { unzipSync } from 'fflate';
+import { downloadResult, fileRow, fixtureBytes, pick, waitForImage, toolTab } from './helpers';
 
 test.use({ serviceWorkers: 'block' });
 
 test('lazy codec, face detection, and upscale assets stay same origin and files never enter HTTP requests', async ({ page, context, baseURL }) => {
+  // This flow cold-loads the GIF encoder, YuNet, and an Upscale model on the same page.
+  test.setTimeout(60_000);
   const origin = new URL(baseURL!).origin;
-  const fixtures = ['oriented.jpg', 'reference.heic', 'animated.gif', 'transparent.png', 'reference.webp', 'reference.avif', 'bg/person-urban.jpg'];
+  const fixtures = ['oriented.jpg', 'reference.heic', 'animated.gif', 'transparent.png', 'reference.webp', 'reference.avif', 'location-metadata.jpg', 'bg/person-urban.jpg'];
   const markers = [...fixtures.map((name) => name.split('/').at(-1)!), 'filekit-private-fixture-marker'];
   const bytes = await Promise.all(fixtures.map(fixtureBytes));
   for (const file of bytes) {
@@ -46,14 +49,17 @@ test('lazy codec, face detection, and upscale assets stay same origin and files 
   await pick(page, ...fixtures);
   await waitForImage(page, 'oriented.jpg');
   await expect(page.getByRole('button', { name: 'Export ZIP' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Crop', exact: true }).click();
+  await toolTab(page, 'Crop').click();
   await page.getByRole('button', { name: 'Flip horizontal' }).click();
   await page.getByRole('button', { name: 'Apply crop' }).click();
   await expect(page.getByRole('button', { name: 'Export ZIP' })).toBeEnabled();
-  expect((await downloadResult(page, 'Export ZIP')).bytes.length).toBeGreaterThan(0);
+  const extendedCodec = /\/workers\/magick\.wasm$/;
+  expect([...requests].filter(url => extendedCodec.test(url))).toEqual([]);
+  const zip = await downloadResult(page, 'Export ZIP');
+  expect(Object.keys(unzipSync(zip.bytes))).toContain('animated.gif');
   const faceModel = /\/face-models\/yunet\.onnx$/;
   await fileRow(page, 'person-urban.jpg').getByRole('button', { name: /^person-urban\.jpg/ }).click();
-  await page.getByRole('button', { name: 'Blur', exact: true }).click();
+  await toolTab(page, 'Blur').click();
   await waitForImage(page, 'person-urban.jpg');
   expect([...requests].filter(url => faceModel.test(url))).toEqual([]);
   await page.getByRole('button', { name: 'Detect faces' }).click();
@@ -62,8 +68,8 @@ test('lazy codec, face detection, and upscale assets stay same origin and files 
   const upscaleChunk = /\/upscale-models\/chunks\/[a-f0-9]{64}\/0\.bin$/;
   expect([...requests].filter(url => upscaleChunk.test(url))).toEqual([]);
   await fileRow(page, 'oriented.jpg').getByRole('button', { name: /^oriented\.jpg/ }).click();
-  await page.getByRole('button', { name: 'Upscale', exact: true }).click();
-  await page.getByRole('radio', { name: 'Art/Text', exact: true }).check();
+  await toolTab(page, 'Upscale').click();
+  await page.getByRole('radio', { name: 'Graphics', exact: true }).check();
   await page.getByRole('button', { name: 'Apply upscale' }).click();
   await expect(page.getByText(/Applied with Real-ESRGAN Anime/)).toBeVisible();
   expect((await downloadResult(page, 'Export image')).bytes.length).toBeGreaterThan(0);
@@ -73,6 +79,7 @@ test('lazy codec, face detection, and upscale assets stay same origin and files 
     expect.stringMatching(/\/workers\/image\.worker\.js$/),
     expect.stringMatching(/\/workers\/mozjpeg_dec-.*\.wasm$/),
     expect.stringMatching(faceModel),
+    expect.stringMatching(extendedCodec),
     expect.stringMatching(/\/fonts\/InterVariable\.woff2$/),
     expect.stringMatching(upscaleChunk),
     expect.stringMatching(/\/bg-runtime\/onnx\/ort-wasm-simd-threaded\.wasm$/),

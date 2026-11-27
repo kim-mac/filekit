@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export const fixturePath = (name: string) => resolve(__dirname, '../fixtures', name);
 export const fixtureBytes = (name: string) => readFile(fixturePath(name));
 export const fileRow = (page: Page, name: string) => page.getByRole('listitem').filter({ hasText: name });
-export const formatChoice = (page: Page, label: string) => page.getByRole('radio', { name: label, exact: true });
+export const outputFormat = (page: Page) => page.getByRole('combobox', { name: 'Output format' });
+export const toolTab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true });
 export const status = (page: Page) => page.locator('.job-status');
 export const savedLink = (page: Page) => page.getByRole('link', { name: 'Save to device' });
 export const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -41,10 +42,31 @@ export async function waitForImage(page: Page, name: string) {
   await expect(page.getByRole('button', { name: 'Export image' })).toBeEnabled();
 }
 
-export async function applyConversion(page: Page, format: string, quality?: number, background?: string) {
-  await formatChoice(page, format).check();
-  if (quality !== undefined) await page.getByRole('slider', { name: 'Quality' }).fill(String(quality));
-  if (background) await page.getByRole('radio', { name: background, exact: true }).check();
+export async function selectFormat(page: Page, label: string) {
+  await outputFormat(page).click();
+  await page.getByRole('option', { name: label === 'JPG' ? 'JPG (JPEG)' : label, exact: true }).click();
+}
+
+export async function setSlider(slider: Locator, value: number) {
+  await expect(slider).toBeVisible();
+  const current = Number(await slider.getAttribute('aria-valuenow'));
+  const min = Number(await slider.getAttribute('aria-valuemin'));
+  const max = Number(await slider.getAttribute('aria-valuemax'));
+  if (value === min || value === max) {
+    await slider.press(value === min ? 'Home' : 'End');
+    return;
+  }
+  const delta = value - current;
+  const direction = delta > 0 ? 'Up' : 'Down';
+  for (let i = 0; i < Math.floor(Math.abs(delta) / 10); i++) await slider.press(`Page${direction}`);
+  for (let i = 0; i < Math.abs(delta) % 10; i++) await slider.press(`Arrow${direction}`);
+  await expect(slider).toHaveAttribute('aria-valuenow', String(value));
+}
+
+export async function applyConversion(page: Page, format: string, quality?: number, fill?: string) {
+  await selectFormat(page, format);
+  if (quality !== undefined) await setSlider(page.getByRole('slider', { name: 'Quality' }), quality);
+  if (fill) await page.getByRole('region', { name: 'Tools' }).getByLabel('Fill transparent areas with').fill(fill);
   await page.getByRole('button', { name: 'Apply convert' }).click();
   await expect(page.getByRole('button', { name: 'Export image' })).toBeEnabled();
 }
@@ -72,4 +94,10 @@ export async function observeModelCalls(page: Page, method: 'findFaces' | 'makeM
     };
   }, method);
   return () => page.evaluate(() => (window as Window & { filekitTestModelCalls?: number }).filekitTestModelCalls);
+}
+
+export async function waitForEstimates(page: Page) {
+  for (const output of await page.locator('.output-estimate strong').all()) {
+    await expect(output).toHaveText(/^≈ /, { timeout: 20_000 });
+  }
 }

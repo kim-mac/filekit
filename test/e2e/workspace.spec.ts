@@ -2,15 +2,15 @@ import { expect, test } from '@playwright/test';
 import { unzipSync } from 'fflate';
 import sharp from 'sharp';
 import {
-  applyConversion, downloadResult, fileRow, fixturePath, formatChoice, openImageWorkspace, pick, sendFiles, sha256,
-  status, waitForImage,
+  applyConversion, downloadResult, fileRow, fixturePath, outputFormat, openImageWorkspace, pick, sendFiles, sha256,
+  status, toolTab, waitForImage,
 } from './helpers';
 
 test('intake through picker, drop, and paste isolates corrupt and unsupported files', async ({ page, isMobile }) => {
   await openImageWorkspace(page);
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser'),
-    isMobile ? page.getByRole('button', { name: 'Add images' }).tap() : page.keyboard.press('Control+o'),
+    isMobile ? page.getByRole('button', { name: /Drop images here/ }).tap() : page.keyboard.press('Control+o'),
   ]);
   expect(chooser.isMultiple()).toBe(true);
   await chooser.setFiles(['oriented.jpg', 'reference.heic', 'broken.jpg'].map(fixturePath));
@@ -18,7 +18,7 @@ test('intake through picker, drop, and paste isolates corrupt and unsupported fi
   await sendFiles(page, 'paste', ['animated.gif', 'reference.webp', 'transparent.png']);
 
   await waitForImage(page, 'oriented.jpg');
-  await expect(page.getByText('64 × 96 px')).toBeVisible();
+  await expect(page.locator('.preview-dimensions')).toHaveText('64 × 96 px');
   await expect(fileRow(page, 'broken.jpg')).toContainText('could not be decoded');
   await expect(fileRow(page, 'unsupported.txt')).toContainText('Unsupported image');
   for (const name of ['reference.heic', 'reference.avif', 'animated.gif', 'reference.webp', 'transparent.png']) {
@@ -34,7 +34,8 @@ test('intake through picker, drop, and paste isolates corrupt and unsupported fi
     await page.getByRole('button', { name: 'Next image' }).click();
   }
   await waitForImage(page, 'reference.heic');
-  await expect(page.getByText('96 × 64 px')).toBeVisible();
+  await expect(page.locator('.preview-dimensions')).toHaveText('96 × 64 px');
+  if (!isMobile) await fileRow(page, 'broken.jpg').locator('.file-row').hover();
   await page.getByRole('button', { name: 'Remove broken.jpg' }).click();
   await expect(fileRow(page, 'broken.jpg')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Export ZIP' })).toBeEnabled();
@@ -57,15 +58,19 @@ for (const [label, format, extension] of [
     await openImageWorkspace(page);
     await pick(page, 'transparent.png');
     await waitForImage(page, 'transparent.png');
-    await expect(page.getByRole('button', { name: 'Convert', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(toolTab(page, 'Convert')).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByText('Exports use the original pixels and strip EXIF metadata.')).toBeVisible();
-    for (const choice of ['JPG', 'PNG', 'WebP', 'AVIF']) await expect(formatChoice(page, choice)).toBeVisible();
+    await expect(outputFormat(page)).toHaveText('Keep original format');
+    await expect(page.getByText('Original format: PNG')).toBeVisible();
     await expect(page.getByRole('slider', { name: 'Quality' })).toHaveCount(0);
 
     const quality = label === 'PNG' ? undefined : 60;
-    await applyConversion(page, label, quality, label === 'JPG' ? 'Black' : undefined);
-    if (quality) await expect(page.getByRole('slider', { name: 'Quality' })).toHaveValue(String(quality));
-    if (label === 'JPG') await expect(page.getByText('JPG · Quality 60% · Black background')).toBeVisible();
+    await applyConversion(page, label, quality, label === 'JPG' ? '#000000' : undefined);
+    if (quality) await expect(page.getByRole('slider', { name: 'Quality' })).toHaveAttribute('aria-valuenow', String(quality));
+    if (label === 'JPG') {
+      await expect(page.getByText('JPG (JPEG) · Quality 60%')).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Export' }).getByLabel('Fill transparent areas with')).toHaveValue('#000000');
+    }
     const result = await downloadResult(page, 'Export image');
     expect(result.name).toBe(`transparent.${extension}`);
     const image = sharp(result.bytes);
@@ -99,16 +104,16 @@ test('undo and redo are per file and ZIP uses each active edit history', async (
   else await page.keyboard.press('Control+z');
   await expect(page.getByText('WebP · Quality 67%')).toBeVisible();
   await page.getByRole('button', { name: 'Redo' }).click();
-  await expect(formatChoice(page, 'PNG')).toBeChecked();
+  await expect(outputFormat(page)).toHaveText('PNG');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled();
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(formatChoice(page, 'WebP')).toBeChecked();
+  await expect(outputFormat(page)).toHaveText('WebP');
 
   await applyConversion(page, 'JPG', 92);
   await expect(page.getByRole('button', { name: 'Redo' })).toBeDisabled();
   await fileRow(page, 'transparent.png').getByRole('button', { name: /transparent.png.*Ready/ }).click();
   await waitForImage(page, 'transparent.png');
-  await expect(formatChoice(page, 'PNG')).toBeChecked();
+  await expect(outputFormat(page)).toHaveText('Keep original format');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 
   const result = await downloadResult(page, 'Export ZIP');
@@ -127,7 +132,7 @@ test('reports progress and cancels a worker export before a successful retry', a
   await openImageWorkspace(page);
   await pick(page, 'transparent.png');
   await waitForImage(page, 'transparent.png');
-  await applyConversion(page, 'JPG', 60, 'Black');
+  await applyConversion(page, 'JPG', 60, '#000000');
 
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });

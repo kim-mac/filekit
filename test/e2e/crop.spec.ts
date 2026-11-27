@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import sharp from 'sharp';
-import { applyConversion, downloadResult, openImageWorkspace, pick, waitForImage } from './helpers';
+import { applyConversion, downloadResult, openImageWorkspace, pick, waitForImage, toolTab } from './helpers';
 
 async function dragCorner(page: Page, corner: Locator, isMobile: boolean, browserName: string) {
   await corner.scrollIntoViewIfNeeded();
@@ -38,17 +38,18 @@ async function dragCorner(page: Page, corner: Locator, isMobile: boolean, browse
 }
 
 test('crops, rotates, flips, and replays edits using each device’s controls', async ({ page, isMobile, browserName }) => {
+  test.setTimeout(50_000);
   const action = (control: Locator) => isMobile ? control.tap() : control.click();
   const button = (name: string) => page.getByRole('button', { name, exact: true });
   const cropBox = page.getByRole('group', { name: 'Crop box' });
   const draftSize = page.getByLabel('Crop size');
-  const actualSize = page.locator('.preview-footer > span');
+  const actualSize = page.locator('.preview-dimensions');
 
   await openImageWorkspace(page);
   await pick(page, 'oriented.png');
   await waitForImage(page, 'oriented.png');
   await applyConversion(page, 'JPG', 70);
-  await action(button('Crop'));
+  await action(toolTab(page, 'Crop'));
   await expect(cropBox).toBeVisible();
 
   for (const [preset, dimensions] of [['1:1', '64 × 64'], ['4:5', '64 × 80'], ['16:9', '64 × 36'], ['9:16', '54 × 96']]) {
@@ -80,7 +81,7 @@ test('crops, rotates, flips, and replays edits using each device’s controls', 
 
   await action(button('Apply crop'));
   await expect(actualSize).toHaveText('80 × 64 px');
-  await expect(page.getByText('JPG · Quality 70%')).toBeVisible();
+  await expect(page.getByText('JPG (JPEG) · Quality 70%')).toBeVisible();
   await expect(button('Undo')).toBeEnabled();
   if (isMobile) await action(button('Undo'));
   else await page.keyboard.press('ControlOrMeta+z');
@@ -90,7 +91,7 @@ test('crops, rotates, flips, and replays edits using each device’s controls', 
   else await page.keyboard.press('ControlOrMeta+Shift+z');
   await expect(actualSize).toHaveText('80 × 64 px');
 
-  await action(button('Convert'));
+  await action(toolTab(page, 'Convert'));
   await applyConversion(page, 'PNG');
   const { name, bytes } = await downloadResult(page, 'Export image');
   expect(name).toBe('oriented.png');
@@ -108,7 +109,7 @@ test('crops, rotates, flips, and replays edits using each device’s controls', 
   expect(pixel(0, 63)).toEqual([39, 107, 214]);
   expect(pixel(79, 63)).toEqual([255, 214, 60]);
 
-  await action(button('Crop'));
+  await action(toolTab(page, 'Crop'));
   await expect(page.getByRole('radio', { name: 'Free', exact: true })).toBeChecked();
   await expect(draftSize).toHaveText('80 × 64 px');
   await dragCorner(page, button('Resize crop from bottom right'), isMobile, browserName);

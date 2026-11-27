@@ -1,6 +1,8 @@
 import type { EditCommand } from '../../core/contracts';
 import type { UpscaleQuality } from '../../tools/image/upscale-options';
-import type { ConvertOptions, InputFormat } from '../../tools/image/formats';
+import type { ConvertOptions, InputFormat, ResolvedOutput } from '../../tools/image/formats';
+import type { SourceMapping } from '../upscale/matte';
+import type { ImageDetails } from './metadata';
 
 export interface ImageRequest {
   readonly id: string;
@@ -11,6 +13,11 @@ export interface ImageRequest {
 export interface PreviewRequest extends ImageRequest {
   readonly maxEdge?: number;
   readonly cache?: boolean;
+  readonly thumbnail?: boolean;
+}
+
+export interface ComparisonRequest extends Pick<ImageRequest, 'id' | 'original'> {
+  readonly mapping: SourceMapping;
 }
 
 export interface ImageInfo {
@@ -18,14 +25,17 @@ export interface ImageInfo {
   readonly width: number;
   readonly height: number;
   readonly hasAlpha: boolean;
-  readonly backgroundColor?: string;
+  readonly details?: ImageDetails;
   readonly upscale?: UpscaleQuality;
-  readonly output: ConvertOptions;
+  readonly output: ResolvedOutput;
+  readonly conversion: ConvertOptions;
 }
 
 export interface PreviewResult {
   readonly blob: Blob;
   readonly info: ImageInfo;
+  readonly mapping: SourceMapping;
+  readonly thumbnail?: Blob;
 }
 
 export interface ImageExport {
@@ -62,6 +72,7 @@ export interface ImageWorkerApi {
   releaseFullPreview(): void;
   renderDraft(request: Pick<ImageRequest, 'id' | 'commands'>): Promise<ImageData | undefined>;
   renderPreview(request: PreviewRequest, onProgress: ProgressCallback): Promise<PreviewResult>;
+  renderComparison(request: ComparisonRequest): Promise<Blob>;
   exportImage(request: ImageRequest, onProgress: ProgressCallback): Promise<ImageExport>;
   exportZip(requests: readonly ImageRequest[], onProgress: ProgressCallback): Promise<ZipResult>;
 }

@@ -1,15 +1,28 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, ImagePlus, Plus, Redo2, Undo2, X } from 'lucide-react';
+import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, Columns2, ImagePlus, Layers, Minus, Plus, Redo2, Undo2 } from 'lucide-react';
 import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import { activeCommands, createEditStack, recordEdit, redo, undo, type EditStack } from '../../lib/core/edit-stack';
 import { imageTools } from '../../lib/tools/image';
 import type { ImageAIResults } from '../../lib/tools/image/ai-results';
-import { outputFormats } from '../../lib/tools/image/formats';
+import type { Size } from '../../lib/tools/image/geometry';
+import { iconSizes, outputFormats } from '../../lib/tools/image/formats';
+import { formatBytes, formatDimensions, formatIconDimensions } from '../../lib/tools/image/size-estimate';
 import { ImageWorkerClient } from '../../lib/workers/image-client';
 import type { ImageExport, ImageInfo, ImageProgress, PreviewResult } from '../../lib/workers/image/types';
+import { Button } from '../ui/button';
+import { Card } from '../ui/card';
+import { ColorField } from '../ui/color-field';
+import { Toggle } from '../ui/toggle';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { FileTile } from './file-tile';
+import { ImageComparison } from './image-comparison';
+import { ImageDetails } from './image-details';
+import { OutputEstimate, SizeEstimator } from './output-estimate';
+import { usePreviewView } from './use-preview-view';
 import { ToolPanel } from './tool-panel';
+import { useObjectUrl } from './use-object-url';
 
 interface Entry {
   readonly id: string;
@@ -18,6 +31,7 @@ interface Entry {
   readonly info?: ImageInfo;
   readonly error?: string;
   readonly exportError?: string;
+  readonly thumbnail?: Blob;
 }
 
 interface Preview {
@@ -29,26 +43,13 @@ interface Preview {
 interface ExportJob {
   readonly kind: 'image' | 'zip';
   readonly entries: readonly Entry[];
+  readonly direct?: boolean;
 }
 
 const inputFormats = '.jpg,.jpeg,.png,.webp,.avif,.gif,.heic,.heif,image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif';
 
 function requestFor({ id, stack }: Entry) {
   return { id, original: stack.original, commands: activeCommands(stack) };
-}
-
-function useObjectUrl(blob?: Blob) {
-  const [objectUrl, setObjectUrl] = useState<{ blob: Blob; url: string }>();
-  useEffect(() => {
-    if (!blob) {
-      setObjectUrl(undefined);
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    setObjectUrl({ blob, url });
-    return () => URL.revokeObjectURL(url);
-  }, [blob]);
-  return objectUrl?.blob === blob ? objectUrl?.url : undefined;
 }
 
 function message(error: unknown) {
@@ -61,6 +62,7 @@ function jobMessage(update: ImageProgress) {
 
 export function ImageWorkspace() {
   const [client] = useState(() => new ImageWorkerClient());
+  const [estimator] = useState(() => new SizeEstimator());
   const [entries, setEntries] = useState<readonly Entry[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [preview, setPreview] = useState<Preview>();
@@ -69,12 +71,19 @@ export function ImageWorkspace() {
   const [exportJob, setExportJob] = useState<ExportJob>();
   const [exportProgress, setExportProgress] = useState<ImageProgress>();
   const [download, setDownload] = useState<ImageExport>();
+  const [directDownload, setDirectDownload] = useState<ImageExport>();
+  const save = useRef<HTMLAnchorElement>(null);
+  const [comparing, setComparing] = useState(false);
+  const [split, setSplit] = useState(50);
+  const [before, setBefore] = useState<{ key: string; blob: Blob }>();
   const [notice, setNotice] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const [previewTarget, setPreviewTarget] = useState<HTMLDivElement | null>(null);
+  const [draftSize, setDraftSize] = useState<Size>();
   const dragDepth = useRef(0);
-  const swipeStart = useRef<{ id: number; x: number; y: number } | undefined>(undefined);
   const picker = useRef<HTMLInputElement>(null);
+  const fileStrip = useRef<HTMLUListElement>(null);
 
   const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0];
   const completed = entries.filter((entry) => entry.status === 'ready');
@@ -86,6 +95,15 @@ export function ImageWorkspace() {
   const work = jobsLocked ? undefined : shouldPreviewSelection ? selected : entries.find((entry) => entry.status === 'pending');
   const previewUrl = useObjectUrl(shownPreview?.result.blob);
   const downloadUrl = useObjectUrl(download?.blob);
+  const mapping = shownPreview?.result.mapping;
+  const comparisonKey = selected && mapping ? JSON.stringify([selected.id, mapping]) : undefined;
+  const comparisonUrl = useObjectUrl(comparing && previewIsCurrent && selected?.stack.cursor &&
+    before?.key === comparisonKey ? before?.blob : undefined);
+  const previewSize = shownPreview?.result.info;
+  const canvasSize = previewSize && !comparisonUrl ? draftSize ?? previewSize : previewSize;
+  const viewport = usePreviewView(stage, canvasSize, selected?.id, entries.length > 1 ? selectAdjacent : undefined);
+  const comparisonOriginal = selected?.stack.original;
+  const beforeKey = before?.key;
   const selectedInfo = selected?.info;
   const activeId = selected?.id;
   const activeStack = selected?.stack;
@@ -115,19 +133,52 @@ export function ImageWorkspace() {
   }, [activeId, activeStack, client]);
   const toolsDisabled = !previewIsCurrent || selected?.status !== 'ready' || jobsLocked || Boolean(work);
 
+  useEffect(() => {
+    if (!comparing || !previewIsCurrent || jobsLocked || work || !activeId || !comparisonOriginal ||
+        !comparisonKey || beforeKey === comparisonKey || !mapping) return;
+    let current = true;
+    client.renderComparison({ id: activeId, original: comparisonOriginal, mapping }).then(blob => {
+      if (current && blob) setBefore({ key: comparisonKey, blob });
+    }, () => {
+      if (current) {
+        setComparing(false);
+        setNotice('Could not show the original. Try Compare again.');
+      }
+    });
+    return () => { current = false; };
+  }, [activeId, beforeKey, client, comparing, comparisonKey, comparisonOriginal, jobsLocked, mapping, previewIsCurrent, work]);
+
+  useEffect(() => {
+    if (download && directDownload === download && downloadUrl && save.current) {
+      save.current.click();
+      setDirectDownload(undefined);
+    }
+  }, [directDownload, download, downloadUrl]);
+
   const updateEntry = useCallback((id: string, update: Partial<Entry>) => {
     setEntries((current) => current.map((entry) => entry.id === id ? { ...entry, ...update } : entry));
   }, []);
 
   useEffect(() => {
+    setBefore(undefined);
     if (activeId) client.retainPreview(activeId);
     else client.stop();
   }, [activeId, client]);
 
   useEffect(() => {
+    const strip = fileStrip.current;
+    const button = strip?.querySelector('[aria-current="true"]');
+    if (!strip || !button) return;
+    const visible = strip.getBoundingClientRect();
+    const tile = button.getBoundingClientRect();
+    if (tile.left < visible.left) strip.scrollBy({ left: tile.left - visible.left - 5 });
+    if (tile.right > visible.right) strip.scrollBy({ left: tile.right - visible.right + 5 });
+  }, [activeId]);
+
+  useEffect(() => {
     if (!work) return;
     let pending = true;
-    const request = { ...requestFor(work), cache: shouldPreviewSelection };
+    const request = { ...requestFor(work), cache: shouldPreviewSelection, thumbnail: !work.thumbnail };
     setPreviewProgress(undefined);
     client.run((worker, progress) => worker.renderPreview(request, progress), (progress) => {
       if (pending) setPreviewProgress(progress);
@@ -135,7 +186,7 @@ export function ImageWorkspace() {
       if (!pending) return;
       pending = false;
       if (shouldPreviewSelection) setPreview({ id: work.id, stack: work.stack, result });
-      updateEntry(work.id, { status: 'ready', info: result.info, error: undefined });
+      updateEntry(work.id, { status: 'ready', info: result.info, thumbnail: result.thumbnail ?? work.thumbnail, error: undefined });
     }, (error: unknown) => {
       if (!pending) return;
       pending = false;
@@ -158,6 +209,7 @@ export function ImageWorkspace() {
       if (!pending) return;
       pending = false;
       setDownload(result);
+      setDirectDownload(exportJob.direct ? result : undefined);
       setNotice(status);
       setExportJob(undefined);
       setExportProgress(undefined);
@@ -193,7 +245,8 @@ export function ImageWorkspace() {
     };
   }, [client, exportJob, updateEntry]);
 
-  useEffect(() => () => client.stop(), [client]);
+  useEffect(() => () => { client.stop(); estimator.stop(); }, [client, estimator]);
+  useEffect(() => { if (jobsLocked) estimator.stop(); }, [estimator, jobsLocked]);
 
   const addFiles = useCallback((files: readonly File[]) => {
     if (!files.length || jobsLocked) return;
@@ -263,14 +316,14 @@ export function ImageWorkspace() {
     if (next && !jobsLocked) setSelectedId(next.id);
   }
 
-  function startExport(kind: ExportJob['kind'], files: readonly Entry[]) {
+  function startExport(kind: ExportJob['kind'], files: readonly Entry[], direct = false) {
     setDownload(undefined);
     setNotice('');
     setExportProgress(undefined);
     setEntries((current) => current.map((entry) => (
       entry.exportError && files.some(({ id }) => id === entry.id) ? { ...entry, exportError: undefined } : entry
     )));
-    setExportJob({ kind, entries: files });
+    setExportJob({ kind, entries: files, direct });
   }
 
   function cancelPreview(entry: Entry) {
@@ -303,10 +356,10 @@ export function ImageWorkspace() {
       }}
     >
       <div className="workspace-heading">
-        <h1>Images</h1>
-        <button className="button primary" onClick={() => picker.current?.click()} disabled={jobsLocked}>
-          <Plus size={19} aria-hidden /> Add images
-        </button>
+        <div className="workspace-title">
+          <span className="workspace-icon"><Layers size={24} aria-hidden /></span>
+          <div><h1>Images</h1><p>Edit and export images on your device.</p></div>
+        </div>
         <input
           ref={picker}
           aria-label="Image files"
@@ -320,57 +373,61 @@ export function ImageWorkspace() {
           }}
         />
       </div>
+      <TooltipProvider delayDuration={500}>
       <div className="workspace-grid">
-        <section className="preview-panel" aria-labelledby="preview-title">
+        <Card className="workspace-card preview-panel" role="region" aria-labelledby="preview-title"
+          onClick={selected ? undefined : event => {
+            if (!(event.target as HTMLElement).closest('button')) picker.current?.click();
+          }}>
           <div className="panel-heading">
             <h2 id="preview-title">Preview</h2>
+            <div className="preview-controls">
+              <Toggle size="sm" variant="outline" pressed={Boolean(comparing && selected?.stack.cursor)}
+                disabled={!previewIsCurrent || !selected?.stack.cursor || jobsLocked}
+                onPressedChange={setComparing} aria-label="Compare">
+                <Columns2 aria-hidden /> Compare
+              </Toggle>
             {entries.length > 1 && (
               <div className="preview-navigation">
-                <button className="icon-button" aria-label="Previous image" disabled={selectionIndex <= 0 || jobsLocked} onClick={() => selectAdjacent(-1)}>
+                <Button variant="ghost" size="icon-sm" aria-label="Previous image" disabled={selectionIndex <= 0 || jobsLocked} onClick={() => selectAdjacent(-1)}>
                   <ChevronLeft size={19} aria-hidden />
-                </button>
+                </Button>
                 <span>{selectionIndex + 1} / {entries.length}</span>
-                <button className="icon-button" aria-label="Next image" disabled={selectionIndex >= entries.length - 1 || jobsLocked} onClick={() => selectAdjacent(1)}>
+                <Button variant="ghost" size="icon-sm" aria-label="Next image" disabled={selectionIndex >= entries.length - 1 || jobsLocked} onClick={() => selectAdjacent(1)}>
                   <ChevronRight size={19} aria-hidden />
-                </button>
+                </Button>
               </div>
             )}
+            </div>
           </div>
           <div
-            ref={setPreviewTarget}
-            className={`preview-stage ${previewUrl ? 'checkerboard' : ''}`}
+            ref={setStage}
+            className={`preview-stage ${previewUrl ? 'checkerboard is-loaded' : ''} ${comparisonUrl ? 'is-comparing' : ''} ${viewport.panning ? 'is-panning' : ''}`}
             aria-busy={Boolean(selected && selected.id === work?.id)}
-            onPointerDown={(event) => {
-              if (event.pointerType !== 'touch') return;
-              swipeStart.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
-            }}
-            onPointerCancel={() => { swipeStart.current = undefined; }}
-            onPointerUp={(event) => {
-              const start = swipeStart.current;
-              swipeStart.current = undefined;
-              if (!start || start.id !== event.pointerId) return;
-              const distance = event.clientX - start.x;
-              if (Math.abs(distance) > 50 && Math.abs(distance) > Math.abs(event.clientY - start.y)) {
-                selectAdjacent(distance < 0 ? 1 : -1);
-              }
-            }}
+            data-zoom={viewport.view.scale}
           >
             {!selected && (
-              <div className="empty-state">
-                <span className="empty-icon"><ImagePlus size={28} aria-hidden /></span>
-                <h3>Add images to get started</h3>
-                <p>Choose files, drop them here, or paste an image.</p>
-                <p className="small">JPG, PNG, WebP, AVIF, GIF, HEIC</p>
-              </div>
+              <button type="button" className="empty-state empty-picker" onClick={() => picker.current?.click()}>
+                <span className="empty-icon"><ImagePlus size={30} aria-hidden /></span>
+                <strong>Drop images here</strong>
+                <span><b>Choose files</b> or paste an image</span>
+                <small>JPG, PNG, WebP, AVIF, GIF, HEIC</small>
+              </button>
             )}
-            {selected && previewUrl && (
-              /* eslint-disable-next-line @next/next/no-img-element -- The preview URL points to a local Blob. */
-              <img className="preview-image" src={previewUrl} alt={`Preview of ${selected.stack.original.name}`} draggable={false} />
+            {selected && previewUrl && shownPreview && (
+              <div ref={setPreviewTarget} className="preview-plane" style={{
+                transform: viewport.view.scale === 1 && viewport.view.x === 0 && viewport.view.y === 0
+                  ? undefined : `translate(${viewport.view.x}px, ${viewport.view.y}px) scale(${viewport.view.scale})`,
+              }}>
+                <ImageComparison name={selected.stack.original.name} editedUrl={previewUrl} originalUrl={comparisonUrl}
+                  width={shownPreview.result.info.width} height={shownPreview.result.info.height}
+                  position={split} onPositionChange={setSplit} />
+              </div>
             )}
             {selected && !previewUrl && selected.status === 'paused' && (
               <div className="empty-state">
                 <p>Preview canceled.</p>
-                <button className="button secondary" onClick={() => updateEntry(selected.id, { status: 'pending' })}>Retry preview</button>
+                <Button variant="outline" onClick={() => updateEntry(selected.id, { status: 'pending' })}>Retry preview</Button>
               </div>
             )}
             {selected && !previewUrl && selected.status === 'error' && <p className="preview-error">{selected.error}</p>}
@@ -378,110 +435,146 @@ export function ImageWorkspace() {
               <p>Preparing image…</p>
             )}
             {selected && previewUrl && selected.status === 'paused' && (
-              <button className="button secondary retry-overlay" onClick={() => updateEntry(selected.id, { status: 'pending' })}>Retry preview</button>
+              <Button variant="outline" className="retry-overlay" onClick={() => updateEntry(selected.id, { status: 'pending' })}>Retry preview</Button>
             )}
           </div>
           <div className="preview-footer">
-            <span>{selectedInfo ? `${selectedInfo.width} × ${selectedInfo.height} px` : 'Dimensions appear after decoding'}</span>
+            {selected && selectedInfo && <div className="preview-facts">
+              <p><span className="preview-dimensions">{formatDimensions(selectedInfo)}</span> · {formatBytes(selected.stack.original.size)}</p>
+              <ImageDetails info={selectedInfo} />
+            </div>}
+            {previewUrl && <div className="zoom-controls" role="group" aria-label="Preview zoom">
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Zoom out" onClick={() => viewport.zoom(0.8)}><Minus aria-hidden /></Button>
+              <output aria-label="Zoom percentage">{viewport.percent}%</output>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Zoom in" onClick={() => viewport.zoom(1.25)}><Plus aria-hidden /></Button>
+              <Button type="button" variant="outline" size="sm" aria-pressed={viewport.atFit} onClick={viewport.reset}>Fit</Button>
+              <Button type="button" variant="outline" size="sm" aria-pressed={viewport.atActualSize} onClick={viewport.actual}>100%</Button>
+            </div>}
             <div className="history-buttons" role="group" aria-label="Edit history">
-              <button className="icon-button" aria-label="Undo" title="Undo (Ctrl/⌘ Z)" disabled={!previewIsCurrent || !selected?.stack.cursor || jobsLocked}
-                onClick={() => selected && edit(selected, undo(selected.stack))}><Undo2 size={18} aria-hidden /></button>
-              <button className="icon-button" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)" disabled={!previewIsCurrent || !selected || selected.stack.cursor >= selected.stack.commands.length || jobsLocked}
-                onClick={() => selected && edit(selected, redo(selected.stack))}><Redo2 size={18} aria-hidden /></button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Undo" disabled={!previewIsCurrent || !selected?.stack.cursor || jobsLocked}
+                    onClick={() => selected && edit(selected, undo(selected.stack))}><Undo2 aria-hidden /></Button>
+                </TooltipTrigger>
+                <TooltipContent>Undo (Ctrl/⌘ Z)</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Redo" disabled={!previewIsCurrent || !selected || selected.stack.cursor >= selected.stack.commands.length || jobsLocked}
+                    onClick={() => selected && edit(selected, redo(selected.stack))}><Redo2 aria-hidden /></Button>
+                </TooltipTrigger>
+                <TooltipContent>Redo (Ctrl/⌘ Shift Z)</TooltipContent>
+              </Tooltip>
             </div>
           </div>
-        </section>
+        </Card>
 
-        <aside className="workspace-sidebar" aria-label="Files and export settings">
-          <section className="file-panel" aria-labelledby="files-title">
-            <div className="panel-heading"><h2 id="files-title">Files</h2><span>{entries.length}</span></div>
-            {entries.length === 0 && <p className="section-note">Added images appear here.</p>}
-            <ul className="file-list">
-              {entries.map((entry) => (
-                <li key={entry.id}>
-                  <div className="file-row">
-                    <button className="select-file" aria-current={entry.id === selected?.id} disabled={jobsLocked}
-                      onClick={() => setSelectedId(entry.id)}>
-                      <span>{entry.stack.original.name}</span>
-                      <small>
-                        {entry.id === exportProgress?.id
-                          ? exportProgress.stage
-                          : entry.id === work?.id
-                            ? previewProgress?.id === entry.id ? previewProgress.stage : 'Checking'
-                            : entry.status === 'ready' ? 'Ready' : entry.status === 'pending' ? 'Queued' : entry.status === 'paused' ? 'Canceled' : 'Could not open'}
-                      </small>
-                    </button>
-                    <button className="icon-button remove-file" aria-label={`Remove ${entry.stack.original.name}`} disabled={jobsLocked}
-                      onClick={() => remove(entry)}><X size={17} aria-hidden /></button>
-                  </div>
-                  {(entry.error || entry.exportError) && <p className="file-error" role="alert">{entry.error || entry.exportError}</p>}
-                </li>
-              ))}
+        <Card className="workspace-card file-panel" role="region" aria-labelledby="files-title">
+          <div className="panel-heading"><h2 id="files-title">Files</h2><span className="file-count">{entries.length}</span></div>
+          {entries.length === 0 ? <p className="section-note">Added images appear here.</p> : (
+            <ul ref={fileStrip} className="file-list" aria-label="Added files">
+              {entries.map((entry) => {
+                const applying = toolBusy && entry.id === activeId;
+                const processing = applying || entry.id === exportProgress?.id || entry.id === work?.id;
+                const status = entry.id === exportProgress?.id ? exportProgress.stage
+                  : entry.id === work?.id ? previewProgress?.id === entry.id ? previewProgress.stage : 'Checking'
+                  : applying ? 'Applying edit'
+                  : entry.exportError ? 'Export failed'
+                  : entry.status === 'ready' ? 'Ready' : entry.status === 'pending' ? 'Queued'
+                  : entry.status === 'paused' ? 'Canceled' : 'Could not open';
+                return <FileTile key={entry.id} name={entry.stack.original.name} thumbnail={entry.thumbnail}
+                  selected={entry.id === selected?.id} processing={processing} status={status}
+                  error={entry.error || entry.exportError} ready={entry.status === 'ready'} disabled={jobsLocked}
+                  onSelect={() => setSelectedId(entry.id)} onRemove={() => remove(entry)}
+                  onDownload={() => startExport('image', [entry], true)} />;
+              })}
+              <li className="add-tile">
+                <Button variant="outline" aria-label="Add more images" disabled={jobsLocked} onClick={() => picker.current?.click()}>
+                  <Plus aria-hidden />
+                </Button>
+              </li>
             </ul>
-          </section>
+          )}
+        </Card>
 
-          <section className="settings-panel" aria-labelledby="tools-title">
+        <aside className="workspace-sidebar" aria-label="Editing and export">
+          <Card className="workspace-card settings-panel" role="region" aria-labelledby="tools-title">
             <div className="panel-heading"><h2 id="tools-title">Tools</h2></div>
-            {selected && selectedInfo && (
-              <ToolPanel revision={selected.stack}
-                registry={imageTools} context={{
+            <ToolPanel registry={imageTools} disabled={toolsDisabled} onBusyChange={setToolBusy}
+              session={selected && selectedInfo ? {
+                revision: selected.stack,
+                context: {
                   original: selected.stack.original, editKey, aiResults, releaseImageMemory: () => client.releaseFullPreview(),
-                  backgroundColor: selectedInfo.backgroundColor,
+                  originalFormat: selectedInfo.format, output: selectedInfo.output, estimator,
                   hasAlpha: selectedInfo.hasAlpha, size: selectedInfo, previewUrl, previewBlob: shownPreview?.result.blob,
-                  previewTarget, renderDraft, preparePreview, upscale: selectedInfo.upscale, disabled: toolsDisabled,
-                }}
-                initialOptions={{
+                  previewTarget, setDraftSize, renderDraft, preparePreview, upscale: selectedInfo.upscale, disabled: toolsDisabled,
+                },
+                initialOptions: {
                   ...Object.fromEntries(activeCommands(selected.stack)
                     .filter(command => imageTools.get(command.toolId).rememberOptions)
                     .map(command => [command.toolId, command.options])),
-                  convert: selectedInfo.output,
-                }}
-                disabled={toolsDisabled}
-                onBusyChange={setToolBusy}
-                onApply={(command: EditCommand) => edit(selected, recordEdit(selected.stack, command))} />
-            )}
-            {(!selected || !selectedInfo) && <p className="section-note">Select a decoded image to edit its output.</p>}
-          </section>
+                  convert: selectedInfo.conversion,
+                },
+                onApply: (command: EditCommand) => edit(selected, recordEdit(selected.stack, command)),
+              } : undefined} />
+          </Card>
 
-          <section className="export-panel" aria-labelledby="export-title">
+          <Card className="workspace-card export-panel" role="region" aria-labelledby="export-title">
             <div className="panel-heading"><h2 id="export-title">Export</h2></div>
             <div className="export-content">
-              {selectedInfo && <p className="output-summary">
-                {outputFormats[selectedInfo.output.format].label}
-                {outputFormats[selectedInfo.output.format].lossy && ` · Quality ${selectedInfo.output.quality}%`}
-                {selectedInfo.hasAlpha && selectedInfo.output.format === 'jpeg' && ` · ${selectedInfo.backgroundColor ?? (selectedInfo.output.background === '#ffffff' ? 'White' : 'Black')} background`}
-              </p>}
+              {selectedInfo && <>
+                <p className="output-summary">
+                  {outputFormats[selectedInfo.output.format].label}
+                  {outputFormats[selectedInfo.output.format].lossy && ` · Quality ${selectedInfo.output.quality}%`}
+                </p>
+                <p className="section-note">
+                  {selectedInfo.output.format === 'ico'
+                    ? formatIconDimensions(selectedInfo.output.iconSizes ?? iconSizes)
+                    : formatDimensions(selectedInfo)}
+                </p>
+                <OutputEstimate estimator={estimator} preview={shownPreview?.result.blob} output={selectedInfo.output}
+                  size={selectedInfo} paused={!previewIsCurrent || jobsLocked} />
+              </>}
+              {selected && selectedInfo?.hasAlpha && !outputFormats[selectedInfo.output.format].alpha && (
+                <ColorField label="Fill transparent areas with" value={selectedInfo.output.background} disabled={toolsDisabled}
+                  onChange={background => edit(selected, recordEdit(selected.stack, {
+                    toolId: 'convert', options: { ...selectedInfo.conversion, background },
+                  }))} />
+              )}
               <p className="section-note">Exports use the original pixels and strip EXIF metadata.</p>
               <div className="export-buttons">
-                <button className="button primary" disabled={selected?.status !== 'ready' || !previewIsCurrent || jobsLocked}
+                <Button disabled={selected?.status !== 'ready' || !previewIsCurrent || jobsLocked}
                   onClick={() => selected && startExport('image', [selected])}>
-                  <ArrowDownToLine size={17} aria-hidden /> Export image
-                </button>
-                <button className="button secondary" disabled={completed.length < 2 || jobsLocked || Boolean(work) || entries.some(({ status }) => status === 'paused')}
+                  <ArrowDownToLine aria-hidden /> Export image
+                </Button>
+                <Button variant="outline" disabled={completed.length < 2 || jobsLocked || Boolean(work) || entries.some(({ status }) => status === 'paused')}
                   onClick={() => startExport('zip', completed)}>
                   <Archive size={17} aria-hidden /> Export ZIP
-                </button>
+                </Button>
               </div>
               <p className="job-status" role="status" aria-live="polite">
                 {exportJob
                   ? exportProgress ? `${jobMessage(exportProgress)}${exportProgress.detail ? ' · File' : ''} ${exportProgress.index} of ${exportProgress.total}…` : 'Starting export…'
                   : work ? `${previewProgress?.id === work.id ? jobMessage(previewProgress) : 'Checking'} ${work.stack.original.name}…` : notice}
               </p>
-              {exportJob && <button className="button secondary" onClick={() => {
+              {exportJob && <Button variant="outline" onClick={() => {
                 setExportJob(undefined);
                 setExportProgress(undefined);
                 setNotice('Export canceled.');
-              }}>Cancel export</button>}
-              {!exportJob && work && <button className="button secondary" onClick={() => cancelPreview(work)}>Cancel preview</button>}
+              }}>Cancel export</Button>}
+              {!exportJob && work && <Button variant="outline" onClick={() => cancelPreview(work)}>Cancel preview</Button>}
               {download && downloadUrl && (
-                <a className="button save-button" href={downloadUrl} download={download.name}>
-                  <Check size={17} aria-hidden /> Save to device
-                </a>
+                <Button asChild variant="secondary">
+                  <a ref={save} href={downloadUrl} download={download.name}>
+                    <Check aria-hidden /> Save to device
+                  </a>
+                </Button>
               )}
             </div>
-          </section>
+          </Card>
         </aside>
       </div>
+      </TooltipProvider>
     </main>
   );
 }

@@ -1,8 +1,11 @@
 import { Scissors } from 'lucide-react';
+import { lazy } from 'react';
 import type { ToolDefinition } from '../../core/contracts';
 import { defaultBackground, parseBackground, type BackgroundOptions } from './background-options';
 import type { ImageToolContext } from './context';
 import type { ImageState } from './formats';
+
+const RemoveBackgroundOptionsPanel = lazy(() => import('./remove-background-panel'));
 
 export const removeBackgroundTool: ToolDefinition<ImageState, BackgroundOptions, ImageState, ImageToolContext> = {
   id: 'remove-background',
@@ -12,32 +15,7 @@ export const removeBackgroundTool: ToolDefinition<ImageState, BackgroundOptions,
   rememberOptions: true,
   defaultOptions: defaultBackground,
   parseOptions: parseBackground,
-  OptionsPanel({ value, onChange, context }) {
-    return (
-      <div className="option-fields">
-        {value.mask && <p>Quality mode {value.mask.tier} · {value.mask.provider === 'webgpu' ? 'WebGPU' : 'WASM'}</p>}
-        {value.mask?.outputMaxEdge && !context.upscale && <p>Maximum output edge on this device is {value.mask.outputMaxEdge} px.</p>}
-        <fieldset>
-          <legend>Background after removal</legend>
-          <div className="format-options">
-            {(['transparent', 'solid', 'blur'] as const).map((mode) => (
-              <label key={mode}>
-                <input type="radio" name="removal-fill" checked={value.mode === mode}
-                  onChange={() => onChange({ ...value, mode })} />
-                <span>{mode === 'transparent' ? 'Transparent' : mode === 'solid' ? 'Solid color' : 'Blur'}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        {value.mode !== 'blur' && (
-          <label className="background-color">
-            <span>{value.mode === 'transparent' ? 'JPG fill color' : 'Background color'}</span>
-            <input type="color" value={value.color} onChange={event => onChange({ ...value, color: event.currentTarget.value })} />
-          </label>
-        )}
-      </div>
-    );
-  },
+  OptionsPanel: RemoveBackgroundOptionsPanel,
   async prepareOptions(options, { original, aiResults, releaseImageMemory }, signal, report) {
     if (options.mask) return options;
     const { generateBackgroundMask } = await import('../../workers/bg0/client');

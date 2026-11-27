@@ -1,7 +1,11 @@
+import { OutputEstimate } from '../../../components/workspace/output-estimate';
+import { Button } from '../../../components/ui/button';
+import { ChoiceGroup } from '../../../components/ui/choice-group';
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { FlipHorizontal2, FlipVertical2, RotateCcw, RotateCw } from 'lucide-react';
 import type { ImageToolContext } from './context';
+import { framePoint } from './preview-view';
 import { cropPresets, type CropOptions, type CropPreset } from './crop';
 import {
   combineOrientations, editGeometry, fullGeometry, geometrySize, orientBounds, orientedSize, orientationMatrix,
@@ -72,6 +76,13 @@ function CropEditor({ value, context, onChange }: PanelProps) {
   const size = orientedSize(context.size, orientation);
   const sourceIsTransposed = orientation >= 5;
   const { left, top, right, bottom } = bounds;
+  const { width, height } = size;
+  const { setDraftSize } = context;
+
+  useEffect(() => {
+    setDraftSize({ width, height });
+    return () => setDraftSize(undefined);
+  }, [width, height, setDraftSize]);
 
   useEffect(() => {
     const cropBox = box.current;
@@ -86,7 +97,7 @@ function CropEditor({ value, context, onChange }: PanelProps) {
     event.stopPropagation();
     event.preventDefault();
     event.currentTarget.focus({ preventScroll: true });
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
       pointerId: event.pointerId, handle, bounds, x: event.clientX, y: event.clientY,
       viewport: viewport.current.getBoundingClientRect(),
@@ -96,13 +107,16 @@ function CropEditor({ value, context, onChange }: PanelProps) {
   function moveDrag(event: PointerEvent<HTMLDivElement>) {
     const start = drag.current;
     if (context.disabled || !start || start.pointerId !== event.pointerId) return;
-    const dx = (event.clientX - start.x) / start.viewport.width;
-    const dy = (event.clientY - start.y) / start.viewport.height;
-    onChange({ ...value, bounds: adjustBounds(start.bounds, start.handle, dx, dy, size, cropPresets[preset]) });
+    const before = framePoint(start, start.viewport);
+    const after = framePoint({ x: event.clientX, y: event.clientY }, start.viewport);
+    onChange({ ...value, bounds: adjustBounds(start.bounds, start.handle, after.x - before.x, after.y - before.y, size, cropPresets[preset]) });
   }
 
   function finishDrag(event: PointerEvent<HTMLDivElement>) {
-    if (drag.current?.pointerId === event.pointerId) drag.current = null;
+    const start = drag.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    drag.current = null;
+    if (event.type === 'pointercancel') onChange({ ...value, bounds: start.bounds });
   }
 
   function nudge(event: KeyboardEvent<HTMLElement>, handle: Handle) {
@@ -201,29 +215,26 @@ export default function CropOptionsPanel({ value, context, onChange }: PanelProp
       {context.previewTarget && createPortal(<CropEditor context={context} value={value} onChange={onChange} />, context.previewTarget)}
       <fieldset>
         <legend>Crop ratio</legend>
-        <div className="format-options crop-ratios">
-          {(Object.keys(cropPresets) as CropPreset[]).map((name) => (
-            <label key={name}>
-              <input type="radio" name="crop-ratio" checked={name === preset} onChange={() => {
-                const aspect = cropPresets[name];
-                onChange({ ...value, preset: name, bounds: aspect ? centeredCrop(orientedSize(context.size, orientation), aspect) : bounds });
-              }} />
-              <span>{name}</span>
-            </label>
-          ))}
-        </div>
+        <ChoiceGroup label="Crop ratio" className="crop-ratios"
+          items={(Object.keys(cropPresets) as CropPreset[]).map(name => ({ value: name, label: name }))}
+          value={preset} disabled={context.disabled} onChange={name => {
+            const aspect = cropPresets[name];
+            onChange({ ...value, preset: name, bounds: aspect ? centeredCrop(orientedSize(context.size, orientation), aspect) : bounds });
+          }} />
       </fieldset>
       <div className="transform-controls" role="group" aria-label="Rotate and flip">
         {transformControls.map(({ label, shortcut, orientation: next, Icon }) => (
-          <button
-            key={label} type="button" className="button secondary" aria-keyshortcuts={shortcut}
+          <Button
+            key={label} type="button" variant="outline" aria-keyshortcuts={shortcut}
             title={`${label} (${shortcut})`} onClick={() => transform(next)}
           >
-            <Icon size={16} aria-hidden /> {label}
-          </button>
+            <Icon aria-hidden /> {label}
+          </Button>
         ))}
       </div>
       <output className="crop-size" aria-label="Crop size">{dimension.width} × {dimension.height} px</output>
+      <OutputEstimate estimator={context.estimator} preview={context.previewBlob} output={context.output}
+        size={dimension} crop={{ bounds, orientation }} paused={context.disabled} />
       <p className="section-note" id="crop-instructions">Drag the box or its corners. Use arrow keys to move the focused box or corner.</p>
     </div>
   );

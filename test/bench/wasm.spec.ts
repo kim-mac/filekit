@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { expect, test, type BrowserContext } from '@playwright/test';
 import sharp from 'sharp';
-import { downloadResult, openImageWorkspace, pick, savedLink, waitForImage } from '../e2e/helpers';
+import { downloadResult, openImageWorkspace, pick, savedLink, waitForImage, toolTab } from '../e2e/helpers';
 
 async function configureWorkers(context: BrowserContext, single: boolean) {
   // Use the same build, assets and input in both runs. Restrict the control
@@ -57,11 +57,11 @@ for (const single of [true, false]) {
     const buffer = await sharp(rgb, { raw: { width, height, channels: 3 } }).jpeg().toBuffer();
     await page.getByLabel('Image files').setInputFiles({ name: 'benchmark.jpg', mimeType: 'image/jpeg', buffer });
     await waitForImage(page, 'benchmark.jpg');
-    await button('Upscale').click();
+    await toolTab(page, 'Upscale').click();
     await page.getByRole('radio', { name: '4×', exact: true }).check();
     const upscaleStart = performance.now();
     await button('Apply upscale').click();
-    await expect(page.locator('.preview-footer > span')).toHaveText('4000 × 4000 px', { timeout: 420_000 });
+    await expect(page.locator('.preview-dimensions')).toHaveText('4000 × 4000 px', { timeout: 420_000 });
     const upscaleMs = Math.round(performance.now() - upscaleStart);
     await expect(page.getByText('Applied with Real-ESRGAN General · WASM')).toBeVisible();
     const cachedStart = performance.now();
@@ -72,7 +72,7 @@ for (const single of [true, false]) {
     await openImageWorkspace(page);
     await pick(page, 'bg/portrait-wind.jpg');
     await waitForImage(page, 'portrait-wind.jpg');
-    await button('Remove background').click();
+    await toolTab(page, 'Remove background').click();
     const bgStart = performance.now();
     await button('Apply remove background').click();
     await expect(page.getByText('Quality mode Lite · WASM')).toBeVisible({ timeout: 120_000 });

@@ -28,6 +28,9 @@ for (const filename of ['bg0-Apache-2.0.txt', 'BiRefNet-MIT.txt', 'Transformers-
 }
 await copy('licenses/upscale/Real-ESRGAN-BSD-3-Clause.txt', join(publicRoot, 'licenses/Real-ESRGAN-BSD-3-Clause.txt'));
 await copy('licenses/inter/Inter-OFL.txt', join(publicRoot, 'licenses/Inter-OFL.txt'));
+await copy('licenses/shadcn/MIT.txt', join(publicRoot, 'licenses/shadcn-MIT.txt'));
+await copy('licenses/magick-wasm/LICENSE', join(publicRoot, 'licenses/Magick-WASM-Apache-2.0.txt'));
+await copy('licenses/magick-wasm/NOTICE', join(publicRoot, 'licenses/Magick-WASM-NOTICE.txt'));
 await copy('THIRD_PARTY_NOTICES.md', join(publicRoot, 'licenses/THIRD_PARTY_NOTICES.md'));
 await copy('LICENSE', join(publicRoot, 'licenses/FileKit-MIT.txt'));
 

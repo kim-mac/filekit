@@ -1,11 +1,12 @@
 import { proxy, releaseProxy, wrap, type Remote } from 'comlink';
-import type { ImageRequest, ImageWorkerApi, ProgressCallback } from './image/types';
+import type { ComparisonRequest, ImageRequest, ImageWorkerApi, ProgressCallback } from './image/types';
 
 export class ImageWorkerClient {
   private worker?: Worker;
   private remote?: Remote<ImageWorkerApi>;
   private rejectJob?: (error: Error) => void;
   private rejectDraft?: (error: Error) => void;
+  private rejectComparison?: (error: Error) => void;
 
   private connect() {
     if (this.remote) return this.remote;
@@ -49,6 +50,19 @@ export class ImageWorkerClient {
     }
   }
 
+  async renderComparison(request: ComparisonRequest) {
+    if (!this.remote) return;
+    let rejectComparison!: (error: Error) => void;
+    const interrupted = new Promise<never>((_, reject) => { rejectComparison = reject; });
+    this.rejectComparison?.(new DOMException('Comparison changed.', 'AbortError'));
+    this.rejectComparison = rejectComparison;
+    try {
+      return await Promise.race([this.remote.renderComparison(request), interrupted]);
+    } finally {
+      if (this.rejectComparison === rejectComparison) this.rejectComparison = undefined;
+    }
+  }
+
   retainPreview(id: string) {
     void this.remote?.retainPreview(id);
   }
@@ -62,6 +76,8 @@ export class ImageWorkerClient {
     this.rejectJob = undefined;
     this.rejectDraft?.(reason);
     this.rejectDraft = undefined;
+    this.rejectComparison?.(reason);
+    this.rejectComparison = undefined;
     this.remote?.[releaseProxy]();
     this.worker?.terminate();
     this.worker = undefined;
