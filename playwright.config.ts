@@ -5,6 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
 process.env.PLAYWRIGHT_FIREFOX_LEGACY_DOWNLOADS ??= '1';
 
 const baseURL = 'http://127.0.0.1:4173';
+const desktopChrome = devices['Desktop Chrome'];
+const performanceSpec = '**/performance.spec.ts';
 
 export default defineConfig({
   testDir: './test/e2e',
@@ -18,14 +20,21 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'desktop-chromium', testIgnore: performanceSpec, use: desktopChrome },
     { name: 'desktop-firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'android-chromium', use: { ...devices['Pixel 7'] } },
+    // Run the 300 ms Chromium timing assertion on an idle host. Use --no-deps to run this project alone.
+    {
+      name: 'desktop-chromium-timing',
+      dependencies: ['desktop-chromium', 'desktop-firefox', 'android-chromium'],
+      testMatch: performanceSpec,
+      workers: 1,
+      use: desktopChrome,
+    },
     // WebKit renders in software on Linux. Run both profiles in exclusive phases to keep frame timings stable.
-    // Use --no-deps to run an individual WebKit profile.
     {
       name: 'desktop-webkit',
-      dependencies: ['desktop-chromium', 'desktop-firefox', 'android-chromium'],
+      dependencies: ['desktop-chromium-timing'],
       workers: 1,
       use: { ...devices['Desktop Safari'] },
     },
