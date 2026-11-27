@@ -27,7 +27,7 @@ export default function UpscaleOptionsPanel({ value: options, context, onChange 
         <RadioGroup aria-label="Image mode" value={options.mode} disabled={context.disabled}
           onValueChange={mode => onChange({ ...options, mode: mode === 'photo' ? 'photo' : 'art' })}>
           {([
-            ['photo', 'Photo', 'For photos of people, landscapes, or products.'],
+            ['photo', 'Photo', 'For camera photos.'],
             ['art', 'Graphics', 'For illustrations, logos, screenshots, or text.'],
           ] as const).map(([mode, label, description]) => (
             <label className="background-choice" key={mode}>

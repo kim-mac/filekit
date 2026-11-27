@@ -59,7 +59,7 @@ for (const [label, format, extension] of [
     await pick(page, 'transparent.png');
     await waitForImage(page, 'transparent.png');
     await expect(toolTab(page, 'Convert')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByText('Export uses the original pixels and removes EXIF metadata.')).toBeVisible();
+    await expect(page.getByText('Uses original pixels. Removes EXIF metadata.')).toBeVisible();
     await expect(outputFormat(page)).toHaveValue('original');
     await expect(page.getByText('Original format: PNG')).toBeVisible();
     await expect(page.getByRole('slider', { name: 'Quality' })).toHaveCount(0);

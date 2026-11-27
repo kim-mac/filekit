@@ -675,7 +675,7 @@ export function ImageWorkspace() {
                   {warnings.map(warning => <p key={warning}>{warning}</p>)}
                 </Notice>
               )}
-              <p className="section-note">Export uses the original pixels and removes EXIF metadata.</p>
+              <p className="section-note">Uses original pixels. Removes EXIF metadata.</p>
               <div className="export-buttons">
                 <Button disabled={selected?.status !== 'ready' || !previewIsCurrent || jobsLocked}
                   onClick={() => selected && startExport('image', [selected])}>
