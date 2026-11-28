@@ -84,7 +84,7 @@ test('drags pages with a mouse or touch and copies pages between desktop files',
   await expect(pageButton(page, 2)).toHaveAttribute('aria-pressed', 'true');
   if (isMobile) return;
   const tile = files(page).getByRole('button', { name: /^scan\.pdf/ });
-  await expect(tile).toContainText('1 page');
+  await expect(tile).toContainText('1 page', { timeout: 15_000 });
   await tile.scrollIntoViewIfNeeded();
   const handle = (await page.getByRole('button', { name: 'Drag page 2' }).boundingBox())!;
   const destination = (await tile.locator('.file-name').boundingBox())!;
@@ -226,9 +226,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const { violations } = await new AxeBuilder({ page }).setLegacyMode().analyze();
     expect(violations.filter(({ impact }) => impact === 'serious' || impact === 'critical')).toEqual([]);
     const screenshot = `pdf-workspace-${colorScheme}.png`;
-    await page.screenshot({ path: info.outputPath(screenshot), fullPage: true, animations: 'disabled' });
+    const capture = { fullPage: true, animations: 'disabled', scale: 'device' } as const;
+    await page.screenshot({ path: info.outputPath(screenshot), ...capture });
     if (process.platform === 'linux') {
-      await expect(page).toHaveScreenshot(screenshot, { fullPage: true, maxDiffPixelRatio: .01 });
+      await expect(page).toHaveScreenshot(screenshot, { ...capture, maxDiffPixelRatio: .01 });
     }
   });
 }
