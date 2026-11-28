@@ -20,11 +20,26 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await audit('licenses');
     await openImageWorkspace(page);
     await audit('empty workspace');
+    if (info.project.name === 'android-chromium') {
+      await page.getByRole('button', { name: /Switch category/ }).click();
+      await expect(page.getByRole('menu', { name: /Switch category/ })).toBeVisible();
+      await audit('category dropdown');
+      await page.keyboard.press('Escape');
+    }
 
     await pick(page, 'transparent.png', 'unsupported.txt', 'broken.jpg');
     await waitForImage(page, 'transparent.png');
     await expect(page.getByRole('region', { name: 'Files' }).getByRole('alert')).toHaveCount(2);
     await audit('loaded workspace and intake errors');
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { value: undefined });
+    });
+    const region = page.getByRole('region', { name: 'Export' });
+    await region.getByRole('button', { name: 'Copy image' }).click();
+    await expect(region.getByRole('button', { name: 'Export instead' })).toBeVisible();
+    await audit('clipboard fallback');
+    await region.getByRole('button', { name: 'Dismiss notice' }).click();
 
     await page.getByRole('button', { name: 'Details' }).click();
     await audit('details');
@@ -38,7 +53,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(page.getByText(text, { exact: true })).toHaveCount(1);
     await page.getByRole('button', { name: 'Apply convert' }).click();
     await waitForImage(page, 'transparent.png');
-    const region = page.getByRole('region', { name: 'Export' });
     await expect(region.getByText(text, { exact: true })).toBeVisible();
     await expect(page.getByText(text, { exact: true })).toHaveCount(1);
     await audit('conversion and transparency warning');

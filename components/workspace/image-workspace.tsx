@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, Columns2, ImagePlus, Layers, Minus, Plus, Redo2, Undo2 } from 'lucide-react';
+import { Archive, ArrowDownToLine, Check, ChevronLeft, ChevronRight, Columns2, Copy, ImagePlus, Layers, Minus, Plus, Redo2, Undo2 } from 'lucide-react';
 import { processingMessage } from '../../lib/core/processing-error';
 import { isMobileDevice } from '../../lib/core/device';
 import { originalBaseName } from '../../lib/core/file-name';
@@ -52,6 +52,14 @@ interface ExportJob {
   readonly direct?: boolean;
 }
 
+type CopyFeedback = { id: string } & (
+  { status: 'copying' | 'copied' | 'large' } |
+  { status: 'error'; message: string }
+);
+
+const clipboardImageType = 'image/png';
+const largeClipboardImagePixels = 40_000_000;
+const textInputTypes = ['text', 'search', 'email', 'url', 'tel', 'password', 'number'];
 const inputFormats = '.jpg,.jpeg,.png,.webp,.avif,.gif,.heic,.heif,image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif';
 
 function requestFor({ id, stack, baseName }: Entry) {
@@ -92,6 +100,7 @@ export function ImageWorkspace() {
   const [toolBusy, setToolBusy] = useState(false);
   const [exportJob, setExportJob] = useState<ExportJob>();
   const [exportProgress, setExportProgress] = useState<ImageProgress>();
+  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>();
   const [download, setDownload] = useState<ImageExport>();
   const [directDownload, setDirectDownload] = useState<ImageExport>();
   const save = useRef<HTMLAnchorElement>(null);
@@ -113,6 +122,7 @@ export function ImageWorkspace() {
   const dragDepth = useRef(0);
   const picker = useRef<HTMLInputElement>(null);
   const fileStrip = useRef<HTMLUListElement>(null);
+  const copyNotice = useRef<HTMLDivElement>(null);
 
   const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0];
   const completed = entries.filter((entry) => entry.status === 'ready');
@@ -120,8 +130,13 @@ export function ImageWorkspace() {
   const shownPreview = preview?.id === selected?.id ? preview : undefined;
   const previewIsCurrent = Boolean(shownPreview && shownPreview.stack === selected?.stack);
   const shouldPreviewSelection = selected?.status === 'pending' || (selected?.status === 'ready' && !previewIsCurrent);
-  const jobsLocked = Boolean(exportJob) || toolBusy;
+  const copying = copyFeedback?.status === 'copying';
+  const jobsLocked = Boolean(exportJob) || toolBusy || copying;
   const work = jobsLocked ? undefined : shouldPreviewSelection ? selected : entries.find((entry) => entry.status === 'pending');
+  const copyEntry = entries.find(({ id }) => id === copyFeedback?.id);
+  const copyStatus = copyEntry ? copyFeedback?.status : undefined;
+  const canCopy = !jobsLocked && !work;
+  const canCopySelected = canCopy && selected?.status === 'ready' && previewIsCurrent;
   const previewUrl = useObjectUrl(shownPreview?.result.blob);
   const downloadUrl = useObjectUrl(download?.blob);
   const mapping = shownPreview?.result.mapping;
@@ -287,9 +302,12 @@ export function ImageWorkspace() {
 
   useEffect(() => () => { client.stop(); estimator.stop(); }, [client, estimator]);
   useEffect(() => { if (jobsLocked) estimator.stop(); }, [estimator, jobsLocked]);
+  useEffect(() => {
+    if (copyStatus === 'large' || copyStatus === 'error') copyNotice.current?.scrollIntoView({ block: 'nearest' });
+  }, [copyFeedback, copyStatus]);
 
   const addFiles = useCallback((files: readonly File[]) => {
-    if (!files.length || jobsLocked) return;
+    if (!files.length) return;
     const added = files.map((file): Entry => ({
       id: crypto.randomUUID(), stack: createEditStack(file), status: 'pending',
     }));
@@ -299,11 +317,12 @@ export function ImageWorkspace() {
     setNotice('');
     setExportError('');
     setExportWarnings([]);
-  }, [jobsLocked]);
+  }, []);
 
   function remove(entry: Entry) {
     const index = entries.indexOf(entry);
     setEntries(entries.filter(({ id }) => id !== entry.id));
+    setCopyFeedback(previous => previous?.id === entry.id ? undefined : previous);
     if (entry.id === selected?.id) setSelectedId(entries[index + 1]?.id ?? entries[index - 1]?.id);
     if (entry.id === preview?.id) setPreview(undefined);
     const nextId = entries[index + 1]?.id ?? entries[index - 1]?.id;
@@ -321,11 +340,60 @@ export function ImageWorkspace() {
   const edit = useCallback((entry: Entry, stack: EditStack) => {
     if (stack === entry.stack) return;
     updateEntry(entry.id, { stack, exportError: undefined });
+    setCopyFeedback(previous => previous?.id === entry.id ? undefined : previous);
     setDownload(undefined);
     setNotice('');
     setExportError('');
     setExportWarnings([]);
   }, [updateEntry]);
+
+  const copyImage = useCallback(async (entry: Entry, allowLarge = false) => {
+    if (!canCopy || entry.status !== 'ready' || !entry.info) return;
+    const { id, info } = entry;
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined' ||
+        ClipboardItem.supports?.(clipboardImageType) === false) {
+      setCopyFeedback({ id, status: 'error', message: 'This browser does not support copying images to the clipboard.' });
+      return;
+    }
+    if (!allowLarge && info.width * info.height > largeClipboardImagePixels) {
+      setCopyFeedback({ id, status: 'large' });
+      return;
+    }
+
+    setCopyFeedback({ id, status: 'copying' });
+    let encodeFailed = false;
+    try {
+      // Safari requires write() in the click or key event, before the worker can return a blob.
+      let provideBlob!: (blob: Promise<Blob>) => void;
+      const png = new Promise<Blob>(resolve => { provideBlob = resolve; });
+      let clipboardBlocked = false;
+      const write = navigator.clipboard.write([new ClipboardItem({ [clipboardImageType]: png })]).catch((error: unknown) => {
+        clipboardBlocked = true;
+        throw error;
+      });
+      const blob = Promise.resolve().then(async () => {
+        if (clipboardBlocked) throw new Error('Clipboard access was blocked.');
+        try {
+          const result = await client.run((worker, progress) =>
+            worker.exportImage({ ...requestFor(entry), format: 'png' }, progress), () => {});
+          return result.blob;
+        } catch (error) {
+          encodeFailed = true;
+          throw error;
+        }
+      });
+      provideBlob(blob);
+      // Keep the shared worker locked until encoding settles, even if the browser rejects the write first.
+      const results = await Promise.allSettled([blob, write]);
+      const failure = results.find(result => result.status === 'rejected');
+      if (failure) throw failure.reason;
+      setCopyFeedback({ id, status: 'copied' });
+    } catch {
+      setCopyFeedback({ id, status: 'error', message: encodeFailed
+        ? 'Could not prepare a PNG for the clipboard.'
+        : 'Clipboard access was blocked or the image could not be written. Check your browser permissions.' });
+    }
+  }, [canCopy, client]);
 
   useLayoutEffect(() => {
     const paste = (event: ClipboardEvent) => {
@@ -338,14 +406,22 @@ export function ImageWorkspace() {
           if (file) files.push(file);
         }
       }
-      if (!files.length || jobsLocked) return;
+      if (!files.length) return;
       event.preventDefault();
       addFiles(files);
     };
     const keydown = (event: KeyboardEvent) => {
-      if ((event.target as HTMLElement | null)?.matches?.('input, textarea, [contenteditable]')) return;
       if (event.defaultPrevented || (!event.metaKey && !event.ctrlKey) || event.altKey || jobsLocked) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest('textarea, [role="textbox"]'))) return;
       const key = event.key.toLowerCase();
+      if (key === 'c' && !event.shiftKey && canCopySelected && selected) {
+        if (target instanceof HTMLInputElement && textInputTypes.includes(target.type)) return;
+        event.preventDefault();
+        if (!event.repeat) void copyImage(selected);
+        return;
+      }
+      if (target instanceof HTMLInputElement) return;
       if (key === 'o') {
         event.preventDefault();
         picker.current?.click();
@@ -362,7 +438,7 @@ export function ImageWorkspace() {
       window.removeEventListener('paste', paste);
       window.removeEventListener('keydown', keydown);
     };
-  }, [addFiles, edit, jobsLocked, previewIsCurrent, selected]);
+  }, [addFiles, canCopySelected, copyImage, edit, jobsLocked, previewIsCurrent, selected]);
 
   function selectAdjacent(direction: number) {
     const next = entries[selectionIndex + direction];
@@ -436,6 +512,7 @@ export function ImageWorkspace() {
   useEffect(() => () => cancelAnimationFrame(dragFrame.current), []);
 
   function startExport(kind: ExportJob['kind'], files: readonly Entry[], direct = false) {
+    setCopyFeedback(undefined);
     setDownload(undefined);
     setNotice('');
     setExportError('');
@@ -454,7 +531,7 @@ export function ImageWorkspace() {
 
   return (
     <main
-      className={`workspace ${dragging ? 'is-dragging' : ''}`}
+      className={`workspace page-container ${dragging ? 'is-dragging' : ''}`}
       onDragEnter={(event) => {
         if (!event.dataTransfer.types.includes('Files')) return;
         event.preventDefault();
@@ -474,7 +551,7 @@ export function ImageWorkspace() {
         event.preventDefault();
         dragDepth.current = 0;
         setDragging(false);
-        addFiles(Array.from(event.dataTransfer.files));
+        if (!jobsLocked) addFiles(Array.from(event.dataTransfer.files));
       }}
     >
       <div className="workspace-heading">
@@ -601,8 +678,11 @@ export function ImageWorkspace() {
             <ul ref={fileStrip} className="file-list" aria-label="Added files" data-touch={isMobileDevice() || undefined} tabIndex={jobsLocked ? 0 : undefined}>
               {entries.map((entry, index) => {
                 const applying = toolBusy && entry.id === activeId;
-                const processing = applying || entry.id === exportProgress?.id || entry.id === work?.id;
-                const status = entry.id === exportProgress?.id ? exportProgress.stage
+                const tileCopyStatus = copyEntry?.id === entry.id ? copyStatus : undefined;
+                const processing = applying || tileCopyStatus === 'copying' || entry.id === exportProgress?.id || entry.id === work?.id;
+                const status = tileCopyStatus === 'copying' ? 'Copying…'
+                  : tileCopyStatus === 'copied' ? 'Copied'
+                  : entry.id === exportProgress?.id ? exportProgress.stage
                   : entry.id === work?.id ? previewProgress?.id === entry.id ? previewProgress.stage : 'Checking'
                   : applying ? 'Applying edit'
                   : entry.exportError ? 'Export failed'
@@ -617,6 +697,7 @@ export function ImageWorkspace() {
                   selected={entry.id === selected?.id} processing={processing} status={status}
                   error={entry.error || entry.exportError} ready={entry.status === 'ready'} disabled={jobsLocked}
                   onSelect={() => selectFile(entry.id)} onRemove={() => remove(entry)}
+                  onCopy={canCopy && entry.status === 'ready' ? () => void copyImage(entry) : undefined}
                   onDownload={() => startExport('image', [entry], true)} />;
               })}
               <li className="add-tile">
@@ -687,12 +768,32 @@ export function ImageWorkspace() {
                   onClick={() => selected && startExport('image', [selected])}>
                   <ArrowDownToLine aria-hidden /> Export image
                 </Button>
-                <Button variant="outline" disabled={completed.length < 2 || jobsLocked || Boolean(work) || entries.some(({ status }) => status === 'paused')}
+                <Button variant="outline" disabled={!canCopySelected && !copying} aria-disabled={copying || undefined}
+                  aria-keyshortcuts="Control+C Meta+C" onClick={() => selected && void copyImage(selected)}>
+                  <Copy aria-hidden /> Copy image
+                </Button>
+                <Button className="export-zip" variant="outline" disabled={completed.length < 2 || jobsLocked || Boolean(work) || entries.some(({ status }) => status === 'paused')}
                   onClick={() => startExport('zip', completed)}>
                   <Archive size={17} aria-hidden /> Export ZIP
                 </Button>
               </div>
               </> : !work && <p className="section-note">Add an image to export it.</p>}
+              <p className="copy-status section-note" role="status">
+                {copyStatus === 'copying' ? 'Copying…' : copyStatus === 'copied' ? 'Copied' : ''}
+              </p>
+              {copyEntry && (copyStatus === 'large' || copyFeedback?.status === 'error') && (
+                <div ref={copyNotice}>
+                  <Notice variant={copyFeedback?.status === 'error' ? 'error' : 'warning'} onDismiss={() => setCopyFeedback(undefined)}>
+                    <p>{copyFeedback?.status === 'error' ? copyFeedback.message
+                      : 'This image is over 40 megapixels. Some apps may reject it when you paste.'}</p>
+                  </Notice>
+                  <div className="copy-options">
+                    <Button variant="outline" disabled={jobsLocked} onClick={() => startExport('image', [copyEntry])}>Export instead</Button>
+                    {copyStatus === 'large' && <Button variant="ghost" disabled={!canCopy}
+                      onClick={() => void copyImage(copyEntry, true)}>Copy anyway</Button>}
+                  </div>
+                </div>
+              )}
               {exportJob ? <JobProgress update={exportJobProgress(exportJob.kind === 'zip', exportProgress)}
                 label="Export progress" statusClass="job-status"
                 file={exportProgress ?? { index: 1, total: exportJob.entries.length }} />
