@@ -1,5 +1,6 @@
 import { proxy, releaseProxy, wrap } from 'comlink';
 import { isMobileDevice } from '../../core/device';
+import { modelForBg0, type BackgroundModel } from '../../tools/image/background-model';
 import type { ImageAIResults } from '../../tools/image/ai-results';
 import type { ToolProgress } from '../../core/contracts';
 import type { BackgroundWorkerApi, RemovalRequest } from './protocol';
@@ -41,10 +42,36 @@ function blockFull() {
   }
 }
 
+let detectedModel: Promise<'full' | 'lite'> | undefined;
+
+export async function autoBackgroundModel(): Promise<'full' | 'lite'> {
+  if (isMobileDevice() || cachedFailure() || marker()) return 'lite';
+  detectedModel ??= new Promise<'full' | 'lite'>(resolve => {
+    let worker: Worker | undefined;
+    const timer = window.setTimeout(() => finish('lite'), 7000);
+    function finish(model: 'full' | 'lite') {
+      window.clearTimeout(timer);
+      worker?.terminate();
+      resolve(model);
+    }
+    try {
+      worker = new Worker(new URL('/workers/background.worker.js', location.origin), { type: 'module' });
+      worker.addEventListener('error', () => finish('lite'), { once: true });
+      worker.addEventListener('messageerror', () => finish('lite'), { once: true });
+      void wrap<BackgroundWorkerApi>(worker).autoModel(navigator.maxTouchPoints).then(finish, () => finish('lite'));
+    } catch {
+      finish('lite');
+    }
+  });
+  return detectedModel;
+}
+
+class FullBackgroundFailure extends Error {}
+
 let busy = false;
 
 export async function generateBackgroundMask(
-  original: Blob, results: ImageAIResults, releaseImageMemory: () => Promise<void> | undefined,
+  original: Blob, model: BackgroundModel, results: ImageAIResults, releaseImageMemory: () => Promise<void> | undefined,
   signal: AbortSignal, report: (update: ToolProgress) => void,
 ) {
   if (busy) throw new Error('Background removal is already in progress.');
@@ -56,17 +83,24 @@ export async function generateBackgroundMask(
   }
   const mobile = isMobileDevice();
   const request: RemovalRequest = {
-    original, model: mobile || cachedFailure() ? 'lite' : 'auto', mobile, touchPoints: navigator.maxTouchPoints,
+    original, model: modelForBg0(model, mobile || cachedFailure()), mobile, touchPoints: navigator.maxTouchPoints,
   };
   // The matte is computed from the immutable original. Background colors,
   // fill modes and later edits all use the same source-space result.
-  const key = JSON.stringify(['bg0-0.1.2', request.model, request.mobile, request.touchPoints]);
+  const key = JSON.stringify(['bg0-0.1.2', model, request.model, request.mobile, request.touchPoints]);
   if (results.background?.key === key) return results.background.mask;
   busy = true;
   try {
     await releaseImageMemory();
-    const mask = await runBackgroundWorker(request, signal, report);
+    const result = await runBackgroundWorker(request, signal, report).catch(async error => {
+      if (!(error instanceof FullBackgroundFailure)) throw error;
+      signal.throwIfAborted();
+      report({ message: 'Switching to Fast', step: 1, totalSteps: 3 });
+      const fallback = await runBackgroundWorker({ ...request, model: 'lite' }, signal, report);
+      return { ...fallback, fellBack: true };
+    });
     signal.throwIfAborted();
+    const mask = { ...result, requestedModel: model };
     results.background = { key, mask };
     return mask;
   } finally {
@@ -122,6 +156,12 @@ export async function runBackgroundWorker(request: RemovalRequest, signal: Abort
       })),
       untilStopped,
     ]);
+  } catch (error) {
+    if (full && !signal.aborted && !request.bench) {
+      blockFull();
+      throw new FullBackgroundFailure('Best quality stopped.', { cause: error });
+    }
+    throw error;
   } finally {
     clearInterval(activity);
     clearMarker();

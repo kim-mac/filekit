@@ -31,10 +31,41 @@ describe('verified model chunks', () => {
   it('replaces corrupted cached bytes, then serves a verified cache hit', async () => {
     const { cache, fetcher } = example();
     cache.set(base + path, new Response(new Uint8Array([0, 0, 0, 0])));
-    const read = async () => new Uint8Array(await (await assetResponse('/model.json')).arrayBuffer());
+    const report = vi.fn();
+    const read = async () => new Uint8Array(await (await assetResponse('/model.json', undefined, undefined, report)).arrayBuffer());
     expect(await read()).toEqual(data);
+    expect(report.mock.calls).toEqual([[0, data.length, sha256, 0], [data.length, data.length, sha256, data.length]]);
+    report.mockClear();
     expect(await read()).toEqual(data);
+    expect(report).not.toHaveBeenCalled();
     expect(fetcher.mock.calls.filter(([url]) => new URL(url).pathname === path)).toHaveLength(1);
+  });
+
+  it('aggregates streamed bytes across chunk boundaries and excludes cached bytes from the transfer rate', async () => {
+    const { cache, fetcher } = example();
+    const bytes = new Uint8Array([...data, ...data, ...data, ...data]);
+    const modelHash = createHash('sha256').update(bytes).digest('hex');
+    const chunk = (index: number) => `${base}/bg-models/chunks/${modelHash}/${index}.bin`;
+    cache.set(chunk(0), new Response(data));
+    cache.set(chunk(3), new Response(data));
+    fetcher.mockImplementation(async url => {
+      if (url === chunk(1) || url === chunk(2)) {
+        return new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(data.slice(0, 2));
+            controller.enqueue(data.slice(2));
+            controller.close();
+          },
+        }));
+      }
+      return Response.json({ bytes: bytes.length, sha256: modelHash, parts: Array(4).fill({ bytes: data.length, sha256 }) });
+    });
+    const report = vi.fn();
+    expect(new Uint8Array(await (await assetResponse('/model.json', undefined, undefined, report)).arrayBuffer())).toEqual(bytes);
+    expect(report.mock.calls.map(([loaded, total, id, received]) => [loaded, total, id, received])).toEqual(
+      [[4, 0], [6, 2], [8, 4], [8, 4], [10, 6], [12, 8], [16, 8]]
+        .map(([loaded, received]) => [loaded, bytes.length, modelHash, received]),
+    );
   });
 
   it('requires the pinned upscale manifest and reads from its own chunk root', async () => {

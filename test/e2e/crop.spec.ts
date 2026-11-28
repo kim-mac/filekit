@@ -38,7 +38,6 @@ async function dragCorner(page: Page, corner: Locator, isMobile: boolean, browse
 }
 
 test('crops, rotates, flips, and replays edits using each device’s controls', async ({ page, isMobile, browserName }) => {
-  test.setTimeout(50_000);
   const action = (control: Locator) => isMobile ? control.tap() : control.click();
   const button = (name: string) => page.getByRole('button', { name, exact: true });
   const cropBox = page.getByRole('group', { name: 'Crop box' });

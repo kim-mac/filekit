@@ -45,9 +45,10 @@ async function rendererPeakKiB(browser: Browser, browserName: string) {
   }
 }
 
-test('times first and subsequent previews and full-resolution export for a 6000Ã—4000 image', async ({ page, browser, browserName }, testInfo) => {
+test('times first and subsequent previews and full-resolution export for a 6000Ã—4000 image', async ({ page, browser, browserName, isMobile }, testInfo) => {
   test.setTimeout(55_000);
   const fixture = 'large-6000x4000.jpg';
+  const desktopChromium = browserName === 'chromium' && !isMobile;
   await openImageWorkspace(page);
   const idlePeakKiB = await rendererPeakKiB(browser, browserName);
   await observePreview(page, 'change');
@@ -90,7 +91,7 @@ test('times first and subsequent previews and full-resolution export for a 6000Ã
 
   let rotatedPeakKiB: number | undefined;
   let rotatedExportMs: number | undefined;
-  if (testInfo.project.name === 'desktop-chromium') {
+  if (desktopChromium) {
     const start = timer.now();
     await page.getByRole('button', { name: 'Export image' }).click();
     await expect(savedLink(page)).toBeVisible({ timeout: 25_000 });
@@ -119,7 +120,7 @@ test('times first and subsequent previews and full-resolution export for a 6000Ã
   expect(uiFrameMs).toBeLessThan(1_500);
   expect(firstPreviewMs).toBeLessThan(20_000);
   expect(exportMs).toBeLessThan(25_000);
-  if (testInfo.project.name === 'desktop-chromium') {
+  if (desktopChromium) {
     expect(Math.max(...subsequentPreviewMs, rotatedPreviewMs)).toBeLessThan(300);
   }
 });

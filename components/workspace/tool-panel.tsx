@@ -1,9 +1,23 @@
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { isMobileDevice } from '../../lib/core/device';
+import { processingMessage } from '../../lib/core/processing-error';
 import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import type { CategoryRegistry } from '../../lib/core/registry';
 import { Button } from '../ui/button';
-import { Progress } from '../ui/progress';
+import { JobProgress } from '../ui/job-progress';
+import { Notice } from '../ui/notice';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+
+const desktopTools = '(min-width: 840px) and (not (any-pointer: coarse))';
+
+function subscribeToToolLayout(update: () => void) {
+  const media = window.matchMedia(desktopTools);
+  media.addEventListener('change', update);
+  return () => media.removeEventListener('change', update);
+}
+
+const useVerticalTools = () => useSyncExternalStore(subscribeToToolLayout,
+  () => !isMobileDevice() && window.matchMedia(desktopTools).matches, () => false);
 
 export function ToolPanel<State, Context>({
   registry, session, onBusyChange, disabled,
@@ -19,15 +33,16 @@ export function ToolPanel<State, Context>({
   disabled: boolean;
 }) {
   const revision = session?.revision;
+  const vertical = useVerticalTools();
   const tools = registry.list();
   const [activeId, setActiveId] = useState(tools[0]?.id);
   const [draft, setDraft] = useState<{ revision: object; options: Readonly<Record<string, unknown>> }>();
   const activeJob = useRef<AbortController>(null);
   const [progress, setProgress] = useState<ToolProgress>();
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState<{ message: string; error?: boolean }>();
   useEffect(() => {
     setProgress(undefined);
-    setStatus('');
+    setStatus(undefined);
     return () => {
       if (activeJob.current) {
         activeJob.current.abort();
@@ -42,24 +57,26 @@ export function ToolPanel<State, Context>({
   const options = drafts[activeId] ?? session?.initialOptions[activeId] ?? tool.defaultOptions;
 
   const busy = Boolean(progress);
+  const longOperation = session && tool.mayTakeAMinute?.(options, session.context);
   const applyDisabled = !session || disabled || busy || Boolean(tool.getApplyError?.(options, session.context));
   async function submit() {
     if (!session || applyDisabled || activeJob.current) return;
     const controller = new AbortController();
     try {
       let value = tool.parseOptions(options);
-      setStatus('');
+      setStatus(undefined);
       if (tool.prepareOptions) {
         activeJob.current = controller;
         onBusyChange(true);
-        setProgress({ message: 'Preparing edit…', progress: 0 });
+        setProgress({ message: 'Preparing image', step: 1, totalSteps: 3 });
         value = await tool.prepareOptions(value, session.context, controller.signal, update => {
-          if (!controller.signal.aborted) setProgress(update);
+          if (activeJob.current !== controller || controller.signal.aborted) return;
+          setProgress(update);
         });
       }
       if (!controller.signal.aborted) session.onApply({ toolId: tool.id, options: tool.parseOptions(value) });
     } catch (error) {
-      if (!controller.signal.aborted) setStatus(error instanceof Error ? error.message : 'This edit could not be applied.');
+      if (!controller.signal.aborted) setStatus({ message: processingMessage(error, 'This edit could not be applied. Try again.'), error: true });
     } finally {
       if (activeJob.current === controller) {
         activeJob.current = null;
@@ -70,9 +87,10 @@ export function ToolPanel<State, Context>({
   }
 
   return (
-    <Tabs className="tool-panel" value={activeId} activationMode="manual"
-      onValueChange={id => { setActiveId(id); setStatus(''); }}>
-      <TabsList className="tool-bar" aria-label="Available tools">
+    <Tabs className="tool-panel" value={activeId} activationMode="manual" orientation={vertical ? 'vertical' : 'horizontal'}
+      onValueChange={id => { setActiveId(id); setStatus(undefined); }}>
+      <TabsList className="tool-bar" aria-label="Available tools"
+        {...(!vertical && (!session || disabled || busy) ? { tabIndex: 0 } : {})}>
         {tools.map(({ id, name, icon: Icon }) => (
           <TabsTrigger key={id} value={id} disabled={!session || disabled || busy}>
             <Icon aria-hidden /> {name}
@@ -93,21 +111,24 @@ export function ToolPanel<State, Context>({
               />
             </Suspense>
           </fieldset>
+          {longOperation && !busy && !applyDisabled && (
+            <div className="tool-feedback"><Notice announce={false}>This may take a minute on this device.</Notice></div>
+          )}
           <Button className="apply" type="submit" aria-disabled={applyDisabled}>Apply {tool.name.toLowerCase()}</Button>
           {progress && (
-            <div className="option-fields">
-              <p role="status">{progress.message}</p>
-              <Progress aria-label="Tool progress" value={progress.progress === undefined ? null : progress.progress * 100} />
+            <div className="tool-feedback option-fields">
+              <JobProgress update={progress} label="Tool progress" />
               <Button variant="outline" type="button" onClick={() => {
                 activeJob.current?.abort();
                 activeJob.current = null;
                 onBusyChange(false);
                 setProgress(undefined);
-                setStatus('Edit canceled.');
+                setStatus({ message: 'Edit canceled.' });
               }}>Cancel edit</Button>
             </div>
           )}
-          {status && <p role="status">{status}</p>}
+          {status && <div className="tool-feedback"><Notice variant={status.error ? 'error' : 'info'}
+            onDismiss={() => setStatus(undefined)}>{status.message}</Notice></div>}
         </form>}
       </TabsContent>
     </Tabs>

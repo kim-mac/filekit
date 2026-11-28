@@ -1,8 +1,8 @@
+import { Notice } from '../../../components/ui/notice';
 import { OutputEstimate } from '../../../components/workspace/output-estimate';
 import { RadioGroup, RadioGroupItem } from '../../../components/ui/radio-group';
 import { ChoiceGroup } from '../../../components/ui/choice-group';
 import { isMobileDevice } from '../../core/device';
-import models from '../../workers/upscale/models.json';
 import { upscaleLimitError, upscaleSize, type UpscaleOptions } from './upscale-options';
 import type { ImageToolContext } from './context';
 
@@ -14,7 +14,6 @@ export default function UpscaleOptionsPanel({ value: options, context, onChange 
   const mobile = isMobileDevice();
   const { width, height } = upscaleSize(context.size, options.scale);
   const error = upscaleLimitError({ width, height }, mobile);
-  const model = models[options.mode === 'photo' ? 'general' : 'anime'];
   return (
     <div className="option-fields">
       <fieldset>
@@ -28,12 +27,12 @@ export default function UpscaleOptionsPanel({ value: options, context, onChange 
         <RadioGroup aria-label="Image mode" value={options.mode} disabled={context.disabled}
           onValueChange={mode => onChange({ ...options, mode: mode === 'photo' ? 'photo' : 'art' })}>
           {([
-            ['photo', 'Photo', 'For camera pictures', '(people, landscapes, products)'],
-            ['art', 'Graphics', 'For illustrations, logos,', 'screenshots, text'],
-          ] as const).map(([mode, label, description, examples]) => (
+            ['photo', 'Photo', 'For camera photos.'],
+            ['art', 'Graphics', 'For illustrations, logos, screenshots, or text.'],
+          ] as const).map(([mode, label, description]) => (
             <label className="background-choice" key={mode}>
               <RadioGroupItem value={mode} aria-label={label} aria-describedby={`upscale-${mode}-description`} />
-              <span><strong>{label}</strong><small id={`upscale-${mode}-description`}>{description}<br />{examples}</small></span>
+              <span><strong>{label}</strong><small id={`upscale-${mode}-description`}>{description}</small></span>
             </label>
           ))}
         </RadioGroup>
@@ -41,10 +40,8 @@ export default function UpscaleOptionsPanel({ value: options, context, onChange 
       <p aria-live="polite">Result {width.toLocaleString('en-US')} × {height.toLocaleString('en-US')} px</p>
       {!error && <OutputEstimate estimator={context.estimator} preview={context.previewBlob} output={context.output}
         size={{ width, height }} paused={context.disabled} />}
-      {error && <p className="file-error" role="status">{error}</p>}
-      <p>{model.label} · {(model.bytes / 2 ** 20).toFixed(2)} MiB model download</p>
-      <p>{mobile ? 'WASM · smaller tiles' : 'WebGPU with WASM fallback'}</p>
-      {context.upscale && <p>Applied with {context.upscale.model} · {context.upscale.provider === 'webgpu' ? 'WebGPU' : 'WASM'}</p>}
+      {error && <Notice variant="warning">{error}</Notice>}
+      {context.upscale && <p className="section-note">Applied with {context.upscale.model} · {context.upscale.provider === 'webgpu' ? 'WebGPU' : 'WASM'}</p>}
     </div>
   );
 }

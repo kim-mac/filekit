@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 export const fixturePath = (name: string) => resolve(__dirname, '../fixtures', name);
 export const fixtureBytes = (name: string) => readFile(fixturePath(name));
@@ -43,23 +43,23 @@ export async function waitForImage(page: Page, name: string) {
 }
 
 export async function selectFormat(page: Page, label: string) {
-  await outputFormat(page).click();
-  await page.getByRole('option', { name: label === 'JPG' ? 'JPG (JPEG)' : label, exact: true }).click();
+  await outputFormat(page).selectOption({ label: label === 'JPG' ? 'JPG (JPEG)' : label });
 }
 
 export async function setSlider(slider: Locator, value: number) {
   await expect(slider).toBeVisible();
-  const current = Number(await slider.getAttribute('aria-valuenow'));
-  const min = Number(await slider.getAttribute('aria-valuemin'));
-  const max = Number(await slider.getAttribute('aria-valuemax'));
+  const [current, min, max] = await slider.evaluate(element =>
+    ['aria-valuenow', 'aria-valuemin', 'aria-valuemax'].map(attribute => Number(element.getAttribute(attribute))));
+  await slider.focus();
+  const keyboard = slider.page().keyboard;
   if (value === min || value === max) {
-    await slider.press(value === min ? 'Home' : 'End');
+    await keyboard.press(value === min ? 'Home' : 'End');
     return;
   }
   const delta = value - current;
   const direction = delta > 0 ? 'Up' : 'Down';
-  for (let i = 0; i < Math.floor(Math.abs(delta) / 10); i++) await slider.press(`Page${direction}`);
-  for (let i = 0; i < Math.abs(delta) % 10; i++) await slider.press(`Arrow${direction}`);
+  for (let i = 0; i < Math.floor(Math.abs(delta) / 10); i++) await keyboard.press(`Page${direction}`);
+  for (let i = 0; i < Math.abs(delta) % 10; i++) await keyboard.press(`Arrow${direction}`);
   await expect(slider).toHaveAttribute('aria-valuenow', String(value));
 }
 
@@ -100,4 +100,27 @@ export async function waitForEstimates(page: Page) {
   for (const output of await page.locator('.output-estimate strong').all()) {
     await expect(output).toHaveText(/^≈ /, { timeout: 20_000 });
   }
+}
+
+export async function holdRequest(context: BrowserContext, match: RegExp) {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await context.route(match, async route => {
+    await gate;
+    await route.continue().catch(() => undefined);
+  }, { times: 1 });
+  return async () => { release(); };
+}
+
+export async function countDownloadNotices(page: Page) {
+  await page.addInitScript(() => {
+    let count = 0;
+    new MutationObserver(records => {
+      count += records.flatMap(record => [...record.addedNodes]).filter((node): node is Element =>
+        node instanceof Element && /One-time model download/.test(node.textContent ?? ''),
+      ).filter(node => node.matches('.notice') || Boolean(node.querySelector('.notice'))).length;
+      document.documentElement.dataset.downloadNotices = String(count);
+    }).observe(document, { childList: true, subtree: true });
+  });
+  return () => page.evaluate(() => Number(document.documentElement.dataset.downloadNotices ?? 0));
 }

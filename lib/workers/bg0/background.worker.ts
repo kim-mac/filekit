@@ -1,24 +1,23 @@
 import { wasmThreads } from '../wasm-threads.mjs';
 import { expose, releaseProxy, type Remote } from 'comlink';
-import { MODEL_TIER_BYTES, prepareBackgroundRemoval, removeBackground, type RemovalProgress } from '@bg0/browser';
+import { getAutoModel, isIosBrowser, prepareBackgroundRemoval, removeBackground, type RemovalProgress } from '@bg0/browser';
 import { decodeImage, encodeImage } from '../image/codecs';
 import { flatten, resizePreview } from '../image/pixels';
 import { defaultConvertOptions } from '../../tools/image/formats';
+import type { ModelDownload } from '../../core/contracts';
 import type { BackgroundWorkerApi, RemovalRequest, RemovalUpdate } from './protocol';
 import { assetResponse } from './asset-stream.mjs';
 
 const modelRoot = '/bg-model-source/';
-const iosModelBytes = 55_563_408;
-const mib = (bytes: number) => `${(bytes / 2 ** 20).toFixed(1)} MiB`;
+const preparing = { message: 'Preparing image', step: 1, totalSteps: 3 } as const;
 
-function isIos(touchPoints: number) {
-  return /iPhone|iPod|iPad/i.test(navigator.userAgent) ||
-    (navigator.userAgent.includes('Macintosh') && touchPoints > 1);
+function setTouchPoints(touchPoints: number) {
+  // WorkerNavigator omits the touch hint used for desktop-mode iPads.
+  Object.defineProperty(navigator, 'maxTouchPoints', { value: touchPoints, configurable: true });
 }
 
-async function configure(request: Omit<RemovalRequest, 'original'>, ios: boolean, report: (update: RemovalUpdate) => void) {
-  // WorkerNavigator omits the touch hint used for desktop-mode iPads.
-  Object.defineProperty(navigator, 'maxTouchPoints', { value: request.touchPoints });
+async function configure(request: Omit<RemovalRequest, 'original'>, ios: boolean, report: (download: ModelDownload) => void) {
+  setTouchPoints(request.touchPoints);
   if (request.forceWasm) Object.defineProperty(navigator, 'gpu', { value: undefined });
   if (ios) return;
   const { env } = await import('@huggingface/transformers');
@@ -33,7 +32,9 @@ async function configure(request: Omit<RemovalRequest, 'original'>, ios: boolean
       return Promise.reject(new Error('Background removal requires same-origin static GET requests.'));
     }
     if (url.pathname.startsWith(modelRoot) && url.pathname.endsWith('/onnx/model_fp16.onnx')) {
-      return assetResponse(`${url.pathname}.json`, req.signal);
+      return assetResponse(`${url.pathname}.json`, req.signal, undefined, (loaded, total, id, received) => {
+        report({ id, loaded, total, received });
+      });
     }
     return fetch(req, { redirect: 'error' });
   };
@@ -45,7 +46,6 @@ async function configure(request: Omit<RemovalRequest, 'original'>, ios: boolean
     const runtime = new URL('/bg-runtime/onnx/', location.origin).href;
     env.useWasmCache = false;
     if (basename.endsWith('.asyncify')) {
-      report({ message: 'Preparing the local inference runtime…', progress: 0.02 });
       wasm.wasmBinary = new Uint8Array(await (await assetResponse(`${runtime}${basename}.wasm.json`)).arrayBuffer());
     }
     wasm.wasmPaths = { mjs: `${runtime}${basename}.mjs`, wasm: `${runtime}${basename}.wasm` };
@@ -59,37 +59,58 @@ async function inferenceInput(original: Blob, edge: number) {
   return encodeImage(flatten(resizePreview(frame, edge), '#ffffff'), defaultConvertOptions);
 }
 
-function progress(update: RemovalProgress, ios: boolean): RemovalUpdate {
-  const tier = update.model === 'birefnet' ? 'Full' : update.model ? 'Lite' : undefined;
-  const bytes = ios ? iosModelBytes : tier === 'Full' ? MODEL_TIER_BYTES.full : MODEL_TIER_BYTES.lite;
-  const detail = update.stage === 'downloading'
-    ? update.download ? ` · ${mib(Math.min(bytes, update.download.loadedBytes))} / ${mib(bytes)}`
-      : ` · Model ${mib(bytes)}`
-    : '';
-  return {
-    message: `${tier ? `${tier} · ` : ''}${update.message}${detail}`,
-    progress: update.progress,
-    full: tier === undefined ? undefined : tier === 'Full',
-  };
+function progress(update: RemovalProgress): RemovalUpdate {
+  const full = update.model === undefined ? undefined : update.model === 'birefnet';
+  const refining = update.stage === 'finishing' || update.message.startsWith('Refining');
+  if (refining) return { message: 'Refining edges', step: 3, totalSteps: 3, full };
+  if (update.stage === 'processing') return { message: 'Finding the subject', step: 2, totalSteps: 3, full };
+  return { ...preparing, full };
 }
 
 let configuration: Promise<void> | undefined;
 const api: BackgroundWorkerApi = {
+  async autoModel(touchPoints) {
+    setTouchPoints(touchPoints);
+    return getAutoModel();
+  },
   async prepare(request) {
-    configuration ??= configure(request, isIos(request.touchPoints), () => undefined);
+    configuration ??= configure(request, isIosBrowser(navigator.userAgent, request.touchPoints), () => undefined);
     await configuration;
     return prepareBackgroundRemoval({ model: request.model });
   },
   async makeMask(request, report) {
     try {
-      const ios = isIos(request.touchPoints);
-      configuration ??= configure(request, ios, report);
+      const ios = isIosBrowser(navigator.userAgent, request.touchPoints);
+      let download: ModelDownload | undefined;
+      let attemptedFull = false;
+      let tier: boolean | undefined;
+      let current: RemovalUpdate = preparing;
+      report(current);
+      configuration ??= configure(request, ios, update => {
+        download = update.loaded < update.total ? update : undefined;
+        report({ ...current, download });
+      });
       await configuration;
       const input = await inferenceInput(request.original, ios ? 1280 : request.mobile ? 1024 : 1600);
       const result = await removeBackground(input, {
         model: request.model,
         quality: request.mobile ? 'fast' : 'quality',
-        onProgress: update => report(progress(update, ios)),
+        onProgress: update => {
+          current = progress(update);
+          if (current.full !== undefined) {
+            if (tier !== undefined && tier !== current.full) download = undefined;
+            tier = current.full;
+            attemptedFull ||= current.full;
+          }
+          if (current.step > 1) download = undefined;
+          if (ios && update.download) {
+            const { loadedBytes, totalBytes, receivedBytes } = update.download;
+            download = loadedBytes < totalBytes ? {
+              id: 'background-ios-lite', loaded: loadedBytes, total: totalBytes, received: receivedBytes,
+            } : undefined;
+          }
+          report({ ...current, download });
+        },
       });
       const { frame } = await decodeImage(result.blob);
       const alpha = new Uint8Array(frame.width * frame.height);
@@ -97,6 +118,7 @@ const api: BackgroundWorkerApi = {
       return {
         id: crypto.randomUUID(), alpha: new Blob([alpha]), width: frame.width, height: frame.height,
         tier: result.model === 'birefnet' ? 'Full' : 'Lite', provider: result.provider,
+        fellBack: result.model !== 'birefnet' && (attemptedFull || request.model === 'full'),
         outputMaxEdge: ios ? 1280 : undefined,
       };
     } finally {

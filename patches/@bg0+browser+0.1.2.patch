@@ -1,17 +1,40 @@
+diff --git a/node_modules/@bg0/browser/dist/index.d.ts b/node_modules/@bg0/browser/dist/index.d.ts
+--- a/node_modules/@bg0/browser/dist/index.d.ts
++++ b/node_modules/@bg0/browser/dist/index.d.ts
+@@ -13,4 +13,5 @@
+         loadedBytes: number;
+         totalBytes: number;
++        receivedBytes?: number;
+     };
+     /** Execution provider, once the engine for this run has been chosen. */
+@@ -48,4 +49,5 @@
+ }
+ export declare function getBrowserCapabilities(): BrowserCapabilities;
++export declare function getAutoModel(): Promise<'full' | 'lite'>;
+ export declare function clearModelCache(): void;
+ /**
 diff --git a/node_modules/@bg0/browser/dist/index.js b/node_modules/@bg0/browser/dist/index.js
 --- a/node_modules/@bg0/browser/dist/index.js
 +++ b/node_modules/@bg0/browser/dist/index.js
-@@ -220,7 +220,7 @@
-                     const scale = maxDim > 1024 ? 1024 / maxDim : 1;
+@@ -37,4 +37,10 @@
+         wasm: true,
+     };
++}
++// Inspect the Auto policy without initializing or downloading a model.
++export async function getAutoModel() {
++    if (useIosModel())
++        return 'lite';
++    return (await getPreferredChoices('auto'))[0].definition.name === 'birefnet' ? 'full' : 'lite';
+ }
+ export function clearModelCache() {
+@@ -221,5 +227,5 @@
                      const w = Math.round(image.width * scale);
                      const h = Math.round(image.height * scale);
 -                    const canvas = document.createElement('canvas');
 +                    const canvas = new OffscreenCanvas(1, 1);
                      canvas.width = w;
                      canvas.height = h;
-                     try {
-@@ -807,10 +807,10 @@
-     return networkFetch(input, init);
+@@ -808,8 +814,8 @@
  }
  function configureModelCache(env) {
 -    const cache = getModelCache();
@@ -23,7 +46,6 @@ diff --git a/node_modules/@bg0/browser/dist/index.js b/node_modules/@bg0/browser
 +    env.customCache = null;
  }
  async function loadEngine(choice, onDownload, onModelFileOpened, stop) {
-     const { provider, definition } = choice;
 diff --git a/node_modules/@bg0/browser/dist/image.js b/node_modules/@bg0/browser/dist/image.js
 --- a/node_modules/@bg0/browser/dist/image.js
 +++ b/node_modules/@bg0/browser/dist/image.js
@@ -87,8 +109,30 @@ diff --git a/node_modules/@bg0/browser/dist/image.js b/node_modules/@bg0/browser
 diff --git a/node_modules/@bg0/browser/dist/ios.js b/node_modules/@bg0/browser/dist/ios.js
 --- a/node_modules/@bg0/browser/dist/ios.js
 +++ b/node_modules/@bg0/browser/dist/ios.js
-@@ -162,8 +162,8 @@
-                 if (crop) {
+@@ -118,5 +118,5 @@
+         let worker;
+         let progress = 0;
+-        const notify = (stage, value, message) => {
++        const notify = (stage, value, message, download) => {
+             progress = Math.max(progress, value);
+             options.onProgress?.({
+@@ -126,4 +126,5 @@
+                 provider: 'wasm',
+                 model: 'birefnet-lite',
++                download,
+             });
+         };
+@@ -146,7 +147,7 @@
+             worker = engine();
+             active = worker;
+-            worker.onStage = (stage, value = 0) => notify(stage === 'loading' ? 'downloading' : 'preparing', stage === 'loading' ? 0.08 + 0.5 * value : 0.6, stage === 'loading'
++            worker.onStage = (stage, value = 0, download) => notify(stage === 'loading' ? 'downloading' : 'preparing', stage === 'loading' ? 0.08 + 0.5 * value : 0.6, stage === 'loading'
+                 ? 'Downloading local model…'
+-                : 'Starting local model…');
++                : 'Starting local model…', download);
+             await worker.load();
+             cancelled(options.signal);
+@@ -163,6 +164,6 @@
                      notify('processing', 0.84, 'Refining fine details…');
                      // Optional second pass uses only the small prepared image, never full-photo pixels.
 -                    const sourceCanvas = document.createElement('canvas');
@@ -97,16 +141,20 @@ diff --git a/node_modules/@bg0/browser/dist/ios.js b/node_modules/@bg0/browser/d
 +                    const cropCanvas = new OffscreenCanvas(1, 1);
                      try {
                          sourceCanvas.width =
-                             sourceCanvas.height =
-@@ -270,7 +270,7 @@
-     loadIdleMs;
+@@ -271,5 +272,5 @@
      runMs;
      onStage;
 -    constructor(createWorker = () => new Worker(new URL('./vendor/ios/worker.mjs', import.meta.url), {
 +    constructor(createWorker = () => new Worker(new URL('/bg-runtime/ios/worker.mjs', location.origin), {
          type: 'module',
      }), timeouts = {}) {
-         this.loadIdleMs = timeouts.loadIdleMs ?? LOAD_IDLE_MS;
+@@ -283,5 +284,5 @@
+                     if (request.type === 'load')
+                         this.watch(id);
+-                this.onStage?.(data.stage, typeof data.progress === 'number' ? data.progress : undefined);
++                this.onStage?.(data.stage, typeof data.progress === 'number' ? data.progress : undefined, data.download);
+                 return;
+             }
 diff --git a/node_modules/@bg0/browser/dist/models.js b/node_modules/@bg0/browser/dist/models.js
 --- a/node_modules/@bg0/browser/dist/models.js
 +++ b/node_modules/@bg0/browser/dist/models.js
@@ -148,24 +196,44 @@ diff --git a/node_modules/@bg0/browser/dist/models.js b/node_modules/@bg0/browse
 diff --git a/node_modules/@bg0/browser/dist/vendor/ios/worker.mjs b/node_modules/@bg0/browser/dist/vendor/ios/worker.mjs
 --- a/node_modules/@bg0/browser/dist/vendor/ios/worker.mjs
 +++ b/node_modules/@bg0/browser/dist/vendor/ios/worker.mjs
-@@ -1,3 +1,5 @@
+@@ -1,2 +1,4 @@
 +import { assetResponse } from './asset-stream.mjs';
 +import { wasmThreads } from './wasm-threads.mjs';
  // Same-family BiRefNet-lite experiment. All pixels stay in this browser.
  // A worker prevents blocking the UI; it does NOT bypass the tab memory limit.
- const runtimeUrl = new URL('./ort.wasm.min.mjs', import.meta.url).href;
-@@ -53,4 +55,4 @@
+@@ -16,6 +18,4 @@
+   const reader = response.body.getReader();
+   let offset = 0;
+-  let reported = 0;
+-  let reportedAt = Date.now();
+   for (;;) {
+     const {done, value} = await reader.read();
+@@ -24,11 +24,4 @@
+     bytes.set(value, offset);
+     offset += value.byteLength;
+-    // Report every 2% or every few seconds, so a slow but moving download
+-    // never looks hung to the page's watchdog.
+-    if (offset - reported >= MODEL_BYTES / 50 || Date.now() - reportedAt >= 5000) {
+-      reported = offset;
+-      reportedAt = Date.now();
+-      self.postMessage({stage:'loading', progress: offset / MODEL_BYTES});
+-    }
+   }
+   if (offset !== MODEL_BYTES) throw new Error('Unexpected model size');
+@@ -53,3 +46,3 @@
 -ort.env.wasm.numThreads = 1;
 +ort.env.wasm.numThreads = wasmThreads(true);
  ort.env.wasm.proxy = false;
  ort.env.wasm.wasmPaths = {
-   mjs: new URL('./ort-wasm-simd-threaded.mjs', import.meta.url).href,
-@@ -60,7 +62,7 @@
+@@ -60,6 +53,9 @@
        if (session) throw new Error('Model already loaded');
        size = 512;
-       self.postMessage({stage:'loading'});
+-      self.postMessage({stage:'loading'});
 -      const response = await fetch(new URL('./int8-full-512.ort',import.meta.url));
-+      const response = await assetResponse(new URL('./int8-full-512.ort.json', import.meta.url).href);
++      const response = await assetResponse(new URL('./int8-full-512.ort.json', import.meta.url).href,
++        undefined, undefined, (loaded, total, _id, received) => self.postMessage({
++          stage: 'loading', progress: loaded / total,
++          download: { loadedBytes: loaded, totalBytes: total, receivedBytes: received },
++        }));
        if (!response.ok) throw new Error('Model download failed');
        let bytes = await downloadModel(response);
-       self.postMessage({stage:'starting'});

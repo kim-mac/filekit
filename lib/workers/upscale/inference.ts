@@ -1,3 +1,5 @@
+import { isMemoryError, memoryRecovery } from '../../core/processing-error';
+import type { ModelDownload } from '../../core/contracts';
 /// <reference types="@webgpu/types" />
 
 import { wasmThreads } from '../wasm-threads.mjs';
@@ -11,7 +13,7 @@ import { upscaleTiles, type TileInput } from './tiles';
 type Ort = typeof import('onnxruntime-web');
 type Provider = UpscaleQuality['provider'];
 type Model = keyof typeof models;
-type Report = (stage: string, detail?: { done: number; total: number }) => void;
+type Report = (stage: string, detail?: { done: number; total: number }, download?: ModelDownload) => void;
 type Engine = { model: Model; provider: Provider; ort: Ort; session: InferenceSession };
 
 const modelRoot = '/upscale-models';
@@ -22,14 +24,20 @@ let gpuAdapter: Promise<GPUAdapter | undefined> | undefined;
 let webgpuFailed = false;
 let webgpuBinary: ArrayBuffer | undefined;
 
-async function loadWeights(model: Model) {
-  const expected = models[model];
-  const response = await assetResponse(`${modelRoot}/${model}.json`, undefined, { root: modelRoot, ...expected });
-  const bytes = await response.arrayBuffer();
-  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
-  const digest = Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('');
-  if (digest !== expected.sha256) throw new Error('Upscale model failed SHA-256 verification.');
-  return bytes;
+async function loadWeights(model: Model, report: Report) {
+  try {
+    const expected = models[model];
+    const response = await assetResponse(`${modelRoot}/${model}.json`, undefined, { root: modelRoot, ...expected },
+      (loaded, total, id, received) => report('Downloading upscale model', undefined, { id, loaded, total, received }));
+    const bytes = await response.arrayBuffer();
+    const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+    const digest = Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('');
+    if (digest !== expected.sha256) throw new Error('Upscale model failed SHA-256 verification.');
+    return bytes;
+  } catch (cause) {
+    if (isMemoryError(cause)) throw new Error(memoryRecovery);
+    throw new Error('Could not download or verify the Upscale model. Check your connection and try again.', { cause });
+  }
 }
 
 async function closeEngine() {
@@ -97,7 +105,7 @@ export async function runUpscale(frame: ImageData, options: UpscaleOptions, repo
     if (engine?.provider !== provider || engine.model !== model) {
       await closeEngine();
       report(`Loading ${label} weights`);
-      weights ??= await loadWeights(model);
+      weights ??= await loadWeights(model, report);
       report(`Starting ${provider === 'wasm' ? 'WASM' : 'WebGPU'}`);
       engine = await openEngine(model, provider, weights, options.mobile, adapter);
     }
@@ -114,7 +122,7 @@ export async function runUpscale(frame: ImageData, options: UpscaleOptions, repo
     // Verify weights before the fallback block so integrity errors get surfaced.
     if (engine?.model !== model || engine.provider !== 'webgpu') {
       report(`Loading ${label} weights`);
-      weights = await loadWeights(model);
+      weights = await loadWeights(model, report);
     }
     try {
       return await run('webgpu');
@@ -128,8 +136,8 @@ export async function runUpscale(frame: ImageData, options: UpscaleOptions, repo
     return await run('wasm');
   } catch (cause) {
     await closeEngine();
-    throw new Error(cause instanceof Error && /chunk|manifest|SHA-256|fetch/i.test(cause.message)
-      ? `Could not verify or load the upscale model. ${cause.message}`
-      : 'Upscaling could not finish. Try a smaller crop or scale.', { cause });
+    if (isMemoryError(cause)) throw new Error(memoryRecovery);
+    if (cause instanceof Error && cause.message.startsWith('Could not download or verify')) throw cause;
+    throw new Error('Upscaling could not finish. Try a smaller crop or scale.', { cause });
   }
 }

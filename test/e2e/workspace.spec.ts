@@ -59,8 +59,8 @@ for (const [label, format, extension] of [
     await pick(page, 'transparent.png');
     await waitForImage(page, 'transparent.png');
     await expect(toolTab(page, 'Convert')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByText('Exports use the original pixels and strip EXIF metadata.')).toBeVisible();
-    await expect(outputFormat(page)).toHaveText('Keep original format');
+    await expect(page.getByText('Uses original pixels. Removes EXIF metadata.')).toBeVisible();
+    await expect(outputFormat(page)).toHaveValue('original');
     await expect(page.getByText('Original format: PNG')).toBeVisible();
     await expect(page.getByRole('slider', { name: 'Quality' })).toHaveCount(0);
 
@@ -104,16 +104,16 @@ test('undo and redo are per file and ZIP uses each active edit history', async (
   else await page.keyboard.press('Control+z');
   await expect(page.getByText('WebP · Quality 67%')).toBeVisible();
   await page.getByRole('button', { name: 'Redo' }).click();
-  await expect(outputFormat(page)).toHaveText('PNG');
+  await expect(outputFormat(page)).toHaveValue('png');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled();
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(outputFormat(page)).toHaveText('WebP');
+  await expect(outputFormat(page)).toHaveValue('webp');
 
   await applyConversion(page, 'JPG', 92);
   await expect(page.getByRole('button', { name: 'Redo' })).toBeDisabled();
   await fileRow(page, 'transparent.png').getByRole('button', { name: /transparent.png.*Ready/ }).click();
   await waitForImage(page, 'transparent.png');
-  await expect(outputFormat(page)).toHaveText('Keep original format');
+  await expect(outputFormat(page)).toHaveValue('original');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 
   const result = await downloadResult(page, 'Export ZIP');
@@ -143,7 +143,9 @@ test('reports progress and cancels a worker export before a successful retry', a
   });
   await page.getByRole('button', { name: 'Export image' }).click();
   try {
-    await expect(status(page)).toHaveText('Encoding 1 of 1…');
+    await expect(status(page)).toHaveText('Step 3 of 3: Encoding image');
+    await expect(page.getByRole('progressbar', { name: 'Export progress' })).toHaveAttribute('aria-valuenow', '66');
+    await expect(page.getByText(/\ds elapsed/)).toBeVisible();
     await page.getByRole('button', { name: 'Cancel export' }).click();
     await expect(status(page)).toHaveText('Export canceled.');
     await expect(page.getByRole('link', { name: 'Save to device' })).toHaveCount(0);
@@ -166,10 +168,10 @@ test('cancels preview intake and retries the same file', async ({ page, context 
 
   await pick(page, 'transparent.png');
   try {
-    await expect(status(page)).toHaveText('Checking transparent.png…');
+    await expect(status(page)).toHaveText('Step 1 of 2: Preparing image');
     await page.getByRole('button', { name: 'Cancel preview' }).click();
     await expect(page.getByText('Preview canceled.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export image' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Export image' })).toHaveCount(0);
   } finally {
     release();
     await context.unroute(workerUrl);

@@ -10,6 +10,10 @@ test.use({ colorScheme: 'light' });
 
 test('opens the picker from Preview and the add tile, and downloads a nonselected file with its saved edits', async ({ page, isMobile }) => {
   await openImageWorkspace(page);
+  for (const name of ['Compare', 'Undo', 'Redo', 'Export image', 'Export ZIP']) {
+    await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
+  }
+  await expect(page.getByRole('region', { name: 'Export' })).toContainText('Add an image to export it.');
   for (const name of ['Convert', 'Crop', 'Blur', 'Remove background', 'Upscale']) {
     await expect(toolTab(page, name)).toBeDisabled();
   }
@@ -38,6 +42,9 @@ test('opens the picker from Preview and the add tile, and downloads a nonselecte
     await page.locator('h1').hover();
     await expect(firstTile.locator('.file-actions')).toHaveCSS('opacity', '0');
     await firstTile.hover();
+  } else {
+    await expect(firstTile.locator('.file-actions')).toHaveCSS('display', 'grid');
+    expect((await download.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   }
   await expect(firstTile.locator('.file-actions')).toHaveCSS('opacity', '1');
   const [output] = await Promise.all([page.waitForEvent('download'), download.click()]);
@@ -62,7 +69,7 @@ test('selects the HEIC fallback and exports new formats through the same-origin 
   await pick(page, 'reference.heic', 'transparent.png');
   await waitForImage(page, 'reference.heic');
   await expect(page.getByText('Original format: HEIC')).toBeVisible();
-  await expect(outputFormat(page)).toHaveText('Keep original format');
+  await expect(outputFormat(page)).toHaveValue('original');
   await expect(page.getByText('HEIC input is exported as JPG.')).toBeVisible();
   expect((await downloadResult(page, 'Export image')).name).toBe('reference.jpg');
   expect(codecRequests).toBe(0);

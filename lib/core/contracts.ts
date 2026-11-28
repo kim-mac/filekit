@@ -20,12 +20,23 @@ export interface ToolDefinition<Input, Options, Output, Context = undefined> {
   readonly defaultOptions: Options;
   readonly rememberOptions?: boolean;
   prepareOptions?(options: Options, context: Context, signal: AbortSignal, onProgress: (update: ToolProgress) => void): Promise<Options>;
+  mayTakeAMinute?(options: Options, context: Context): boolean;
   getApplyError?(options: Options, context: Context): string | undefined;
   parseOptions(value: unknown): Options;
   apply(input: Input, options: Options): Promise<Output>;
 }
 
+export interface ModelDownload {
+  readonly id: string;
+  readonly loaded: number;
+  readonly total: number;
+  readonly received?: number;
+}
+
 export interface ToolProgress {
   readonly message: string;
-  readonly progress: number;
+  readonly step: number;
+  readonly totalSteps: number;
+  readonly tiles?: { readonly done: number; readonly total: number };
+  readonly download?: ModelDownload;
 }

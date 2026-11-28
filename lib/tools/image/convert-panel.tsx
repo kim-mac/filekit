@@ -1,11 +1,12 @@
+import { Notice } from '../../../components/ui/notice';
 import { OutputEstimate } from '../../../components/workspace/output-estimate';
 import { ColorField } from '../../../components/ui/color-field';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
+import { Select } from '../../../components/ui/select';
 import { Slider } from '../../../components/ui/slider';
 import { Toggle } from '../../../components/ui/toggle';
 import type { ImageToolContext } from './context';
 import { formatIconDimensions } from './size-estimate';
-import { iconSizes, outputFormats, resolveOutput, type ConvertOptions, type OutputSelection } from './formats';
+import { iconSizes, outputFormats, transparencyWarning, resolveOutput, type ConvertOptions, type OutputSelection } from './formats';
 
 export default function ConvertOptionsPanel({ value, onChange, context }: {
   value: ConvertOptions;
@@ -22,16 +23,10 @@ export default function ConvertOptionsPanel({ value, onChange, context }: {
       <p className="original-format">Original format: <strong>{originalFormat === 'heic' ? 'HEIC' : outputFormats[originalFormat].label}</strong></p>
       <div className="option-fields field">
         <label htmlFor="output-format">Output format</label>
-        <Select value={value.format} onValueChange={format => onChange({ ...value, format: format as OutputSelection })} disabled={disabled}>
-          <SelectTrigger id="output-format" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="original">Keep original format</SelectItem>
-            {Object.entries(outputFormats).map(([format, { label }]) => (
-              <SelectItem key={format} value={format}>{label}</SelectItem>
-            ))}
-          </SelectContent>
+        <Select id="output-format" value={value.format} disabled={disabled}
+          onChange={event => onChange({ ...value, format: event.currentTarget.value as OutputSelection })}>
+          <option value="original">Keep original format</option>
+          {Object.entries(outputFormats).map(([format, { label }]) => <option key={format} value={format}>{label}</option>)}
         </Select>
         {value.format === 'original' && originalFormat === 'heic' && <p className="section-note">HEIC input is exported as JPG.</p>}
         {format === 'gif' && <p className="section-note">Exports one frame. Animated inputs use their first frame.</p>}
@@ -48,6 +43,10 @@ export default function ConvertOptionsPanel({ value, onChange, context }: {
         <ColorField label="Fill transparent areas with" value={value.background} disabled={disabled}
           onChange={background => onChange({ ...value, background })} />
       )}
+      {context.hasAlpha && !outputFormats[format].alpha &&
+        (format !== context.output.format || resolved.background !== context.output.background) && (
+          <Notice variant="warning">{transparencyWarning(resolved)}</Notice>
+        )}
       {format === 'ico' && (
         <fieldset className="option-fields field">
           <legend>Icon sizes</legend>

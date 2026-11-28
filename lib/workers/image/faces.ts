@@ -1,8 +1,10 @@
+import type { ModelDownload, ToolProgress } from '../../core/contracts';
+import { verifiedAsset } from '../bg0/asset-stream.mjs';
 import { wasmThreads } from '../wasm-threads.mjs';
 import { InferenceSession, Tensor, env } from 'onnxruntime-web/wasm';
 import type { Bounds } from '../../tools/image/geometry';
 import { resizePreview } from './pixels';
-import { yuNetSha256 } from './face-model';
+import { preparingFaces, yuNetBytes, yuNetSha256 } from './face-model';
 
 const modelUrl = '/face-models/yunet.onnx';
 const runtimeName = 'ort-wasm-simd-threaded';
@@ -10,14 +12,10 @@ const anchors = [[10, 16, 24], [32, 48], [64, 96], [128, 192, 256]];
 
 let detector: Promise<InferenceSession> | undefined;
 
-function loadDetector(mobile: boolean) {
+function loadDetector(mobile: boolean, report?: (download: ModelDownload) => void) {
   detector ??= (async () => {
-    const response = await fetch(modelUrl, { redirect: 'error' });
-    if (!response.ok) throw new Error('Could not load the local face detector.');
-    const weights = await response.arrayBuffer();
-    const digest = await crypto.subtle.digest('SHA-256', weights);
-    const hex = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-    if (hex !== yuNetSha256) throw new Error('Could not verify the local face detector.');
+    const weights = await verifiedAsset(modelUrl, { bytes: yuNetBytes, sha256: yuNetSha256 },
+      report && (loaded => report({ id: yuNetSha256, loaded, total: yuNetBytes })));
 
     const runtime = new URL('/bg-runtime/onnx/', location.origin).href;
     env.wasm.wasmPaths = { mjs: `${runtime}${runtimeName}.mjs`, wasm: `${runtime}${runtimeName}.wasm` };
@@ -38,7 +36,7 @@ function overlap(a: Bounds, b: Bounds) {
   return intersection / (area(a) + area(b) - intersection);
 }
 
-export async function findYuNetFaces(frame: ImageData, session: InferenceSession): Promise<Bounds[]> {
+export async function findYuNetFaces(frame: ImageData, session: InferenceSession, onInferenceComplete?: () => void): Promise<Bounds[]> {
   const { width, height, data } = resizePreview(frame, 320);
   const paddedWidth = Math.ceil(width / 64) * 64;
   const paddedHeight = Math.ceil(height / 64) * 64;
@@ -63,6 +61,7 @@ export async function findYuNetFaces(frame: ImageData, session: InferenceSession
   } finally {
     tensor.dispose();
   }
+  onInferenceComplete?.();
   const loc = result.loc.data as Float32Array;
   const conf = result.conf.data as Float32Array;
   const iou = result.iou.data as Float32Array;
@@ -102,6 +101,8 @@ export async function findYuNetFaces(frame: ImageData, session: InferenceSession
   return kept;
 }
 
-export async function detectFaces(frame: ImageData, mobile: boolean) {
-  return findYuNetFaces(frame, await loadDetector(mobile));
+export async function detectFaces(frame: ImageData, mobile: boolean, report: (update: ToolProgress) => void) {
+  const session = await loadDetector(mobile, download => report({ ...preparingFaces, download }));
+  report({ message: 'Finding faces', step: 2, totalSteps: 3 });
+  return findYuNetFaces(frame, session, () => report({ message: 'Preparing face regions', step: 3, totalSteps: 3 }));
 }

@@ -1,4 +1,4 @@
-import type { EditCommand } from '../../core/contracts';
+import type { EditCommand, ModelDownload } from '../../core/contracts';
 import type { UpscaleQuality } from '../../tools/image/upscale-options';
 import type { ConvertOptions, InputFormat, ResolvedOutput } from '../../tools/image/formats';
 import type { SourceMapping } from '../upscale/matte';
@@ -7,6 +7,7 @@ import type { ImageDetails } from './metadata';
 export interface ImageRequest {
   readonly id: string;
   readonly original: File;
+  readonly baseName?: string;
   readonly commands: readonly EditCommand[];
 }
 
@@ -59,6 +60,7 @@ export type ImageStage = 'Decoding' | 'Rendering preview' | 'Applying edits' | '
 export interface ImageProgress {
   readonly stage: ImageStage;
   readonly detail?: string;
+  readonly download?: ModelDownload;
   readonly tiles?: { readonly done: number; readonly total: number };
   readonly id: string;
   readonly index: number;

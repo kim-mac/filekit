@@ -1,3 +1,4 @@
+import { isMemoryError, memoryRecovery, processingMessage } from '../../core/processing-error';
 import { Zip, ZipPassThrough } from 'fflate';
 import type { EditCommand } from '../../core/contracts';
 import { sameBackground, type BackgroundOptions } from '../../tools/image/background-options';
@@ -16,7 +17,7 @@ import type {
   ComparisonRequest, FileFailure, ImageExport, ImageProgress, ImageRequest, ImageStage, PreviewRequest, PreviewResult, ProgressCallback, ZipResult,
 } from './types';
 
-type ReportStage = (stage: ImageStage, detail?: string, tiles?: ImageProgress['tiles']) => void;
+type ReportStage = (stage: ImageStage, detail?: string, tiles?: ImageProgress['tiles'], download?: ImageProgress['download']) => void;
 type DecodedImage = Awaited<ReturnType<typeof decodeImage>>;
 
 interface PreviewSource {
@@ -62,6 +63,7 @@ async function decodeOriginal(original: File, report: ReportStage, normalize = t
   try {
     return await decodeImage(original, normalize, details);
   } catch (error) {
+    if (isMemoryError(error)) throw new Error(memoryRecovery);
     if (error instanceof Error && error.message.startsWith('Unsupported image.')) throw error;
     throw new Error('This image could not be decoded. Check that the original opens and add it again.', { cause: error });
   }
@@ -163,7 +165,7 @@ export async function renderDraft({ id, commands }: Pick<ImageRequest, 'id' | 'c
 }
 
 export async function renderPreview(request: PreviewRequest, progress: ProgressCallback): Promise<PreviewResult> {
-  const report: ReportStage = (stage, detail, tiles) => progress({ id: request.id, stage, detail, tiles, index: 1, total: 1 });
+  const report: ReportStage = (stage, detail, tiles, download) => progress({ id: request.id, stage, detail, tiles, download, index: 1, total: 1 });
   const upscale = upscaleProgram(request.commands);
   if (upscale) return renderUpscaledPreview(request, upscale, report);
   const source = await previewSource(request, report);
@@ -265,7 +267,7 @@ async function upscalePrefix(
     if (!quality && program.maxEdge) frame = resizePreview(frame, program.maxEdge);
     const nextMapping = mapSource(mapping, frame, scaleGeometry(state.geometry, size, frame));
     frame = await rasterStage(frame, size, state, mapping, 'orient');
-    const result = await runUpscale(frame, state.upscaleEdit, (detail, tiles) => report('Upscaling', detail, tiles));
+    const result = await runUpscale(frame, state.upscaleEdit, (detail, tiles, download) => report('Upscaling', detail, tiles, download));
     frame = result.frame;
     quality = result.quality;
     mapping = nextMapping;
@@ -329,6 +331,7 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
   if (upscale) {
     const cached = activeFile === request.id && activeUpscaled?.key === upscale.key ? activeUpscaled.full : undefined;
     const raster = cached ?? await upscalePrefix(request, upscale, report);
+    report('Applying edits');
     return finishUpscale(raster, upscale, false, Boolean(cached));
   }
   releaseFullPreview();
@@ -343,11 +346,11 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
   const output = resolveOutput(format, conversion);
   // The AVIF wrapper reads the entire backing buffer, so crops need a dense raster.
   const mode = output.format === 'avif' ? 'orient' : 'compact';
+  report('Applying edits');
   if (!backgroundEdit && !blurEdits) return { frame: renderGeometry(original, geometry, mode), output };
   const maxEdge = backgroundEdit?.mask?.outputMaxEdge;
   const bounded = maxEdge ? resizePreview(original, maxEdge) : original;
   const mapped = maxEdge ? scaleGeometry(geometry, original, bounded) : geometry;
-  report('Applying edits');
   await applyRasterEdits(bounded, original, state);
   return { frame: renderGeometry(bounded, mapped, mode), output };
 }
@@ -356,14 +359,15 @@ async function encodeRequest(request: ImageRequest, report: ReportStage): Promis
   const { frame, output } = await prepareExport(request, report);
   report('Encoding');
   try {
-    return { blob: await encodeImage(frame, output), name: outputName(request.original.name, output.format) };
+    return { blob: await encodeImage(frame, output), name: outputName(request.original.name, output.format, request.baseName) };
   } catch (error) {
+    if (isMemoryError(error)) throw new Error(memoryRecovery);
     throw new Error('This image could not be encoded. Try a different output format and export again.', { cause: error });
   }
 }
 
 export function exportImage(request: ImageRequest, progress: ProgressCallback): Promise<ImageExport> {
-  return encodeRequest(request, (stage, detail, tiles) => progress({ id: request.id, stage, detail, tiles, index: 1, total: 1 }));
+  return encodeRequest(request, (stage, detail, tiles, download) => progress({ id: request.id, stage, detail, tiles, download, index: 1, total: 1 }));
 }
 
 function uniqueName(name: string, names: Set<string>) {
@@ -387,12 +391,12 @@ export async function exportZip(requests: readonly ImageRequest[], progress: Pro
   let count = 0;
 
   for (const [index, request] of requests.entries()) {
-    const report: ReportStage = (stage, detail, tiles) => progress({ id: request.id, stage, detail, tiles, index: index + 1, total: requests.length });
+    const report: ReportStage = (stage, detail, tiles, download) => progress({ id: request.id, stage, detail, tiles, download, index: index + 1, total: requests.length });
     let result: ImageExport;
     try {
       result = await encodeRequest(request, report);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not export this image.';
+      const message = processingMessage(error, 'Could not export this image. Try a smaller image or a different format.');
       failures.push({ id: request.id, message });
       continue;
     }

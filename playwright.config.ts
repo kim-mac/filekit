@@ -5,24 +5,40 @@ import { defineConfig, devices } from '@playwright/test';
 process.env.PLAYWRIGHT_FIREFOX_LEGACY_DOWNLOADS ??= '1';
 
 const baseURL = 'http://127.0.0.1:4173';
+const desktopChrome = devices['Desktop Chrome'];
+const performanceSpec = '**/performance.spec.ts';
 
 export default defineConfig({
   testDir: './test/e2e',
   snapshotPathTemplate: '{testDir}/../screenshots/{projectName}/{arg}{ext}',
   reporter: 'list',
   forbidOnly: Boolean(process.env.CI),
-  // Concurrent software-rendered WebKit sessions contend for CPU and skew frame timings.
-  workers: 1,
+  // Limit rendering contention while allowing independent browser workflows to overlap.
+  workers: 2,
   use: {
     baseURL,
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'desktop-chromium', testIgnore: performanceSpec, use: desktopChrome },
     { name: 'desktop-firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'desktop-webkit', use: { ...devices['Desktop Safari'] } },
-    { name: 'iphone-webkit', use: { ...devices['iPhone 15'] } },
     { name: 'android-chromium', use: { ...devices['Pixel 7'] } },
+    // Run the 300 ms Chromium timing assertion on an idle host. Use --no-deps to run this project alone.
+    {
+      name: 'desktop-chromium-timing',
+      dependencies: ['desktop-chromium', 'desktop-firefox', 'android-chromium'],
+      testMatch: performanceSpec,
+      workers: 1,
+      use: desktopChrome,
+    },
+    // WebKit renders in software on Linux. Run both profiles in exclusive phases to keep frame timings stable.
+    {
+      name: 'desktop-webkit',
+      dependencies: ['desktop-chromium-timing'],
+      workers: 1,
+      use: { ...devices['Desktop Safari'] },
+    },
+    { name: 'iphone-webkit', dependencies: ['desktop-webkit'], workers: 1, use: { ...devices['iPhone 15'] } },
   ],
   webServer: {
     command: 'npm run build && npm run preview',

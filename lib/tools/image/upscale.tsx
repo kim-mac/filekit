@@ -15,6 +15,10 @@ export const upscaleTool: ToolDefinition<ImageState, UpscaleOptions, ImageState,
   icon: Maximize,
   defaultOptions: defaultUpscale,
   parseOptions: parseUpscale,
+  mayTakeAMinute(options, { size }) {
+    const output = upscaleSize(size, options.scale);
+    return output.width * output.height >= 4_000_000;
+  },
   getApplyError(options, { size }) {
     return upscaleLimitError(upscaleSize(size, options.scale), isMobileDevice());
   },
