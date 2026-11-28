@@ -1,5 +1,7 @@
-import { Combine, Copy, FileImage, FilePlus2, Files, ImagePlus, PanelsTopLeft, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
+import { Combine, Copy, FileImage, FilePlus2, Files, ImagePlus, PanelsTopLeft, Pencil, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
 import type { ComponentProps } from 'react';
+import { EditControls } from '../../../components/workspace/pdf/pdf-edit-controls';
+import type { PdfEditor } from '../../../components/workspace/pdf/use-pdf-editor';
 import { Button } from '../../../components/ui/button';
 import { Select } from '../../../components/ui/select';
 import type { ToolDefinition } from '../../core/contracts';
@@ -23,6 +25,7 @@ export interface PdfToolContext {
   documents: readonly OpenDocument[];
   mobile: boolean;
   canRender: boolean;
+  editor?: PdfEditor;
 }
 
 type ToolResult =
@@ -268,8 +271,37 @@ const raster: PdfTool<RasterOptions> = {
   },
 };
 
+const editPdf: PdfTool<Extract<PageOperation, { kind: 'overlay' | 'form' }> | null> = {
+  id: 'edit', name: 'Edit', category: 'pdf', icon: Pencil, actionLabel: false,
+  defaultOptions: null,
+  parseOptions(value) {
+    const operation = fieldValue(value);
+    if (typeof operation.id !== 'string') return null;
+    if (operation.kind === 'overlay' && Array.isArray(operation.objects)) {
+      return { kind: 'overlay', id: operation.id, objects: operation.objects };
+    }
+    if (operation.kind === 'form' && typeof operation.name === 'string') {
+      const field = operation.value;
+      if (field === null || typeof field === 'boolean' || typeof field === 'string' ||
+        Array.isArray(field) && field.every(item => typeof item === 'string')) {
+        return { kind: 'form', id: operation.id, name: operation.name, value: field };
+      }
+    }
+    return null;
+  },
+  OptionsPanel({ context }) {
+    return context.canRender && context.editor
+      ? <EditControls editor={context.editor} />
+      : <p className="section-note">A single-page preview is needed to edit a PDF. Open a page to continue.</p>;
+  },
+  async apply(state, operation) {
+    return operation ? { ...state, result: { kind: 'edit', operation, message: 'Updated PDF.' } } : state;
+  },
+};
+
 export const pdfTools = new CategoryRegistry<PdfToolState, PdfToolContext>('pdf');
 pdfTools.register(organize);
+pdfTools.register(editPdf);
 pdfTools.register(merge);
 pdfTools.register(split);
 pdfTools.register(images);

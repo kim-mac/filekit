@@ -81,9 +81,12 @@ await copyFile(require.resolve('@imagemagick/magick-wasm/magick.wasm'), `${outdi
 const pdf = dirname(require.resolve('pdfjs-dist/package.json'));
 const pdfAssets = resolve(outdir, 'pdf');
 const pdfLicenses = resolve('public/licenses/pdf');
+const pdfFontLicenses = resolve('public/licenses/pdf-fonts');
 const qpdfDist = dirname(require.resolve('@neslinesli93/qpdf-wasm'));
 await mkdir(pdfAssets, { recursive: true });
 await mkdir(pdfLicenses, { recursive: true });
+await mkdir(pdfFontLicenses, { recursive: true });
+await cp(resolve('licenses/pdf-fonts'), pdfFontLicenses, { recursive: true });
 await copyFile(resolve(pdf, 'legacy/build/pdf.worker.min.mjs'), resolve(pdfAssets, 'pdf.worker.min.mjs'));
 await copyFile(resolve(qpdfDist, 'qpdf.wasm'), resolve(pdfAssets, 'qpdf.wasm'));
 await Promise.all(['cmaps', 'iccs', 'standard_fonts', 'wasm'].map(directory =>
@@ -93,6 +96,7 @@ await Promise.all([
   ['pdf-lib-MIT.txt', require.resolve('pdf-lib/LICENSE.md')],
   ['pdf-lib-standard-fonts-MIT.txt', require.resolve('@pdf-lib/standard-fonts/LICENSE.md')],
   ['pdf-lib-upng-MIT.txt', require.resolve('@pdf-lib/upng/LICENSE')],
+  ['pdf-lib-fontkit-MIT.txt', resolve('licenses/pdf/Fontkit-MIT.txt')],
   ['qpdf-wasm-ISC.txt', resolve(qpdfDist, '../LICENSE')],
   ['QPDF-Apache-2.0.txt', resolve('licenses/pdf/QPDF-Apache-2.0.txt')],
   ['QPDF-NOTICE.md', resolve('licenses/pdf/QPDF-NOTICE.md')],

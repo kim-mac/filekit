@@ -31,6 +31,8 @@ expose({
     return render.preview(page, source, edge, mobile);
   }),
   size: (page, source, mobile) => serial(async () => (await getRenderer()).size(page, source, mobile)),
+  editing: (page, source, mobile) => serial(async () => (await getRenderer()).editing(page, source, mobile)),
+  prepareImage: (blob, removeBackground) => serial(async () => (await import('./pdf/editor-image')).prepareImage(blob, removeBackground)),
   retain: ids => serial(async () => { await (await renderer)?.retain(ids); }),
   export: (request, report) => reportUntilDone(report, () => exportPdf(request, report, getRenderer)),
 } satisfies PdfWorkerApi);

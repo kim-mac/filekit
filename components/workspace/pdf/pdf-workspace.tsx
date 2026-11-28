@@ -8,10 +8,12 @@ import { activeCommands, redo, undo } from '../../../lib/core/edit-stack';
 import { isMemoryError } from '../../../lib/core/processing-error';
 import { formatBytes } from '../../../lib/tools/image/size-estimate';
 import { pdfTools, type OrganizeAction, type PdfToolContext } from '../../../lib/tools/pdf';
+import { hasRedactions, redactionWarning } from '../../../lib/tools/pdf/overlay';
 import { pageRenderKey, type PageOperation, type PageRef } from '../../../lib/tools/pdf/pages';
 import { PdfWorkerClient } from '../../../lib/workers/pdf/client';
 import type { ExportResult, RasterOptions } from '../../../lib/workers/pdf/types';
 import { Button } from '../../ui/button';
+import { Select } from '../../ui/select';
 import { Card } from '../../ui/card';
 import { JobProgress } from '../../ui/job-progress';
 import { Notice } from '../../ui/notice';
@@ -24,6 +26,7 @@ import { PasswordDialog } from './password-dialog';
 import { PdfDetails } from './pdf-details';
 import { PdfFileThumbnail } from './pdf-file-thumbnail';
 import { SinglePage } from './single-page';
+import { usePdfEditor } from './use-pdf-editor';
 import { documentBaseName, documentName, documentPages, usePdfDocuments, type PdfEntry } from './use-pdf-documents';
 
 const accepted = '.pdf,.jpg,.jpeg,.png,.webp,.avif,.gif,.heic,.heif,application/pdf,image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif';
@@ -48,6 +51,9 @@ export function PdfWorkspace() {
   const [notice, setNotice] = useState<{ type: 'info' | 'error' | 'warning'; text: string }>();
   const [announcement, setAnnouncement] = useState('');
   const [strip, setStrip] = useState(false);
+  const [editableHighlights, setEditableHighlights] = useState(false);
+  const [flattenFields, setFlattenFields] = useState(false);
+  const [activeTool, setActiveTool] = useState('organize');
   const [view, setView] = useState<'grid' | 'single'>('grid');
   const [multi, setMulti] = useState(false);
   const [selection, setSelection] = useState<Selection>();
@@ -72,11 +78,16 @@ export function PdfWorkspace() {
   const pageIndex = Math.max(0, pages.findIndex(page => page.id === (selectionHere?.focus ?? first)));
   const currentView = selectionHere ? view : 'grid';
   const { canRender } = documents;
+  const editing = activeTool === 'edit' && currentView === 'single' && canRender;
+  const editor = usePdfEditor(pages[pageIndex], editing, locked, (operation, message) =>
+    edit(operation, message, activeId, 'edit'), documents.inspectPage, documents.prepareImage);
   const context = ready && activeId
-    ? { activeId, pages, selected: chosenPages, documents: openFiles, mobile, canRender } satisfies PdfToolContext : undefined;
+    ? { activeId, pages, selected: chosenPages, documents: openFiles, mobile, canRender, editor: editing ? editor : undefined } satisfies PdfToolContext : undefined;
   const primarySources = new Set(pages.flatMap(page => page.kind === 'blank' ? [] : [page.source]));
   const containsEncrypted = [...primarySources].some(source => sources.get(source)?.encrypted);
   const containsForms = [...primarySources].some(source => sources.get(source)?.forms);
+  const containsHighlights = pages.some(page => page.objects?.some(object => object.kind === 'highlight'));
+  const appliedRedactions = pages.some(page => hasRedactions(page.objects));
   const bytes = estimateBytes(pages, sources);
   const large = pages.length >= 200 || bytes >= 64 * 1024 * 1024;
 
@@ -92,6 +103,10 @@ export function PdfWorkspace() {
     function onKey(event: KeyboardEvent) {
       if (event.defaultPrevented || locked || !context || documents.lockedFile || event.altKey ||
         (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=dialog], [role=menu]'))) return;
+      if (editor.keyboard(event)) {
+        event.preventDefault();
+        return;
+      }
       const key = event.key.toLowerCase();
       if (event.metaKey || event.ctrlKey) {
         const action = key === 'z' ? () => changeHistory(event.shiftKey ? 'redo' : 'undo')
@@ -147,8 +162,9 @@ export function PdfWorkspace() {
   function selectFile(entry: PdfEntry) {
     if (entry.id !== activeId) {
       clearOutput();
-      setSelection(undefined);
-      setView('grid');
+      const next = activeTool === 'edit' && canRender ? documentPages(entry)[0]?.id : undefined;
+      setSelection(next ? { document: entry.id, ids: new Set([next]), anchor: next, focus: next } : undefined);
+      setView(next ? 'single' : 'grid');
     }
     documents.select(entry);
   }
@@ -159,7 +175,7 @@ export function PdfWorkspace() {
     if (stack !== selected.stack) {
       documents.setEntry(selected.id, { stack });
       clearOutput();
-      setAnnouncement(action === 'undo' ? 'Undid page edit.' : 'Redid page edit.');
+      setAnnouncement(action === 'undo' ? 'Undid PDF edit.' : 'Redid PDF edit.');
     }
   }
 
@@ -265,6 +281,7 @@ export function PdfWorkspace() {
       const result = await exporter.export({
         baseName: documentBaseName(entry) + (options?.suffix ?? ''), sources: input,
         primary: entry.primary, strip, initial: entry.initial, commands: activeCommands(entry.stack), groups,
+        editableHighlights, flattenFields, mobile,
         archive: options?.archive,
         raster: options?.raster && { ...options.raster, mobile, pageNumbers: groups.map(([index]) => index + 1) },
       }, progress => {
@@ -272,11 +289,13 @@ export function PdfWorkspace() {
       });
       if (exportToken.current !== token) return;
       setDownload({ ...result, document: entry.id, direct, pdf: !options });
-      if (result.limited) setNotice({ type: 'warning', text: 'Some images reached the mobile size limit and were exported at a lower effective DPI.' });
+      if (result.limited) setNotice({ type: 'warning', text: mobile
+        ? 'Some images reached the mobile limit of 16 MP and 8,192 pixels per side and were exported at a lower effective DPI.'
+        : 'Some redacted pages reached the desktop raster limit and were saved at a lower effective DPI.' });
     } catch (error) {
       if (exportToken.current === token) {
         const message = isMemoryError(error) ? 'This device ran out of memory. Try fewer pages, a lower DPI, or a desktop.'
-          : error instanceof Error && /too large at the selected DPI|PDF worker stopped/.test(error.message) ? error.message
+          : error instanceof Error && /too large at the selected DPI|PDF worker stopped|Apply or remove|bundled PDF font|selected PDF font|removal of unused PDF resources|redaction is outside/.test(error.message) ? error.message
           : 'Could not export this PDF. Try fewer pages or open the original in another PDF reader.';
         setNotice({ type: 'error', text: message });
       }
@@ -290,7 +309,7 @@ export function PdfWorkspace() {
   }
 
   return (
-    <WorkspaceShell title="PDF" description="Organize and export PDF pages on your device." icon={FileText}
+    <WorkspaceShell title="PDF" description="Organize, edit and export PDF pages on your device." icon={FileText}
       locked={locked || !device} onFiles={documents.addFiles} picker={<input ref={picker} aria-label="PDF and image files" type="file"
         multiple accept={accepted} disabled={locked || !device} hidden onChange={event => {
           documents.addFiles(Array.from(event.currentTarget.files ?? []));
@@ -349,7 +368,7 @@ export function PdfWorkspace() {
             <Button variant="ghost" size="icon" aria-label="Next page" title="Next page"
               disabled={pageIndex + 1 === pages.length} onClick={() => focusPage(pageIndex + 1)}><ChevronRight aria-hidden /></Button>
           </div>
-          <SinglePage page={pages[pageIndex]} number={pageIndex + 1} render={documents.render} />
+          <SinglePage page={pages[pageIndex]} number={pageIndex + 1} render={documents.render} editor={editor} />
         </>}
         {ready && selected && <div className="preview-footer">
           <div className="preview-facts"><span>{pageCount(pages.length)}</span>{pages[pageIndex] &&
@@ -410,7 +429,13 @@ export function PdfWorkspace() {
       <aside className="workspace-sidebar" aria-label="Editing and export">
         <Card className="workspace-card settings-panel" role="region" aria-labelledby="tools-title">
           <div className="panel-heading"><h2 id="tools-title">Tools</h2></div>
-          <ToolPanel registry={pdfTools} disabled={locked} emptyMessage="Add a PDF or image to start."
+          <ToolPanel registry={pdfTools} disabled={locked} emptyMessage="Add a PDF or image to start." onToolChange={id => {
+            setActiveTool(id);
+            if (id === 'edit' && canRender) {
+              if (!selectionHere) focusPage(pageIndex);
+              setView('single');
+            }
+          }}
             session={selected && context ? {
               revision: selected.stack, context, initialOptions: {}, onApply: command => { void useTool(command); },
             } : undefined} />
@@ -428,8 +453,22 @@ export function PdfWorkspace() {
                   clearOutput();
                 }} /> Remove PDF metadata
               </label>
+              {containsHighlights && <label className="field pdf-field"><span>PDF annotations</span>
+                <Select value={editableHighlights ? 'editable' : 'flatten'} disabled={locked} onChange={event => {
+                  setEditableHighlights(event.target.value === 'editable');
+                  clearOutput();
+                }}><option value="flatten">Flatten everything</option><option value="editable">Keep highlights editable</option></Select>
+              </label>}
+              {containsForms && <label className="pdf-checkbox">
+                <input type="checkbox" checked={flattenFields || appliedRedactions} disabled={locked || appliedRedactions} onChange={event => {
+                  setFlattenFields(event.target.checked);
+                  clearOutput();
+                }} /> Make fields non-editable
+              </label>}
+              {containsForms && appliedRedactions && <p className="section-note">Secure redaction keeps filled values visible and makes form fields non-editable.</p>}
               {containsEncrypted && <Notice variant="warning" announce={false}>The exported PDF will open without a password.</Notice>}
-              {containsForms && <Notice announce={false}>Copied or extracted form pages may lose interactive fields. Field appearances are kept where available.</Notice>}
+              {appliedRedactions && !editing && <Notice variant="warning" announce={false}>{redactionWarning}</Notice>}
+              {appliedRedactions && mobile && <p className="section-note">Redacted pages are limited to 16 MP and 8,192 pixels per side on mobile.</p>}
               <Button disabled={locked} onClick={() => void startExport(selected)}><ArrowDownToLine aria-hidden /> Export PDF</Button>
             </> : <p className="section-note">Open a file to export it.</p>}
             {work && !documents.lockedFile && !exporting && <JobProgress label="Open progress" update={work.progress} />}

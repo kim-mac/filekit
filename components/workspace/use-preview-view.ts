@@ -148,7 +148,7 @@ export function usePreviewView(stage: HTMLDivElement | null, size: Size | undefi
         return;
       }
     }
-    const editing = target instanceof Element && Boolean(target.closest('.blur-editor, .crop-editor'));
+    const editing = target instanceof Element && Boolean(target.closest('.blur-editor, .crop-editor, [data-preview-edit]'));
     const overSlider = target instanceof Element && Boolean(target.closest('[data-slot=slider]'));
     const override = event.button === 1 || (event.button === 0 && space.current);
     if (pan.current || (!override && (event.button !== 0 || editing || overSlider))) return;
@@ -207,7 +207,7 @@ export function usePreviewView(stage: HTMLDivElement | null, size: Size | undefi
   const move = useEffectEvent(pointerMove);
   const end = useEffectEvent(pointerEnd);
   const doubleClick = useEffectEvent((event: MouseEvent) => {
-    if (!size || !(event.target instanceof Element) || event.target.closest('button, [data-slot=slider]')) return;
+    if (!size || !(event.target instanceof Element) || event.target.closest('button, [data-slot=slider], [data-preview-edit]')) return;
     if (current.current === fitView) actual();
     else reset();
   });

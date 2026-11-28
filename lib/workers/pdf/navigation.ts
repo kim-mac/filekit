@@ -46,7 +46,11 @@ export function sourceNavigation(document: PDFDocument, pages: readonly PDFPage[
     const page = array.get(0);
     const index = page instanceof PDFRef ? pageIndices.get(page) : page instanceof PDFNumber ? page.asNumber() : undefined;
     if (index === undefined || index < 0 || index >= pages.length) return;
-    return { index, view: array.asArray().slice(1).map(item => document.context.lookup(item) ?? PDFNull) };
+    const view = array.asArray().slice(1).map(item => {
+      const value = document.context.lookup(item);
+      return value instanceof PDFName || value instanceof PDFNumber ? value : PDFNull;
+    });
+    return { index, view };
   }
 
   function navigation(dict: PDFDict): Navigation | undefined {
@@ -108,20 +112,22 @@ export function restorePageLinks(
 
 export function restoreBookmarks(
   output: PDFDocument,
-  groups: readonly { bookmarks: readonly Bookmark[]; targets: ReadonlyMap<number, PDFPage> }[],
+  groups: readonly { bookmarks: readonly Bookmark[]; targets: ReadonlyMap<number, PDFPage>; redacted?: ReadonlySet<number> }[],
 ) {
   const context = output.context;
   interface OutlineItem { title: string; dest?: PDFArray; uri?: string; children: OutlineItem[] }
-  function prepare(bookmarks: readonly Bookmark[], targets: ReadonlyMap<number, PDFPage>): OutlineItem[] {
+  function prepare(bookmarks: readonly Bookmark[], targets: ReadonlyMap<number, PDFPage>, redacted?: ReadonlySet<number>): OutlineItem[] {
     return bookmarks.flatMap(bookmark => {
       const navigation = bookmark.navigation;
-      const dest = navigation && 'destination' in navigation ? remap(navigation.destination, targets, output) : undefined;
+      const destination = navigation && 'destination' in navigation ? navigation.destination : undefined;
+      const dest = remap(destination, targets, output);
       const uri = navigation && 'uri' in navigation ? navigation.uri : undefined;
-      const children = prepare(bookmark.children, targets);
+      const children = prepare(bookmark.children, targets, redacted);
+      if (destination && redacted?.has(destination.index)) return children;
       return dest || uri || children.length ? [{ title: bookmark.title, dest, uri, children }] : [];
     });
   }
-  const items = groups.flatMap(({ bookmarks, targets }) => prepare(bookmarks, targets));
+  const items = groups.flatMap(({ bookmarks, targets, redacted }) => prepare(bookmarks, targets, redacted));
   if (!items.length) {
     output.catalog.delete(name('Outlines'));
     return;

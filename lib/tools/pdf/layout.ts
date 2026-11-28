@@ -29,12 +29,12 @@ export function rotatedSize({ width, height }: PageSize, rotation: number): Page
   return rotation % 180 === 0 ? { width, height } : { width: height, height: width };
 }
 
-export function pixelDimensions({ width, height }: PageSize, dpi: number, mobile: boolean) {
+export function pixelDimensions({ width, height }: PageSize, dpi: number, mobile: boolean, fitToLimit = mobile) {
   const cap = mobile ? mobileRasterPixels : desktopRasterPixels;
   const requested = dpi / 72;
   const limit = Math.min(Math.sqrt(cap / (width * height)), (mobile ? 8192 : 16380) / Math.max(width, height));
-  const scale = mobile ? Math.min(requested, limit) : requested;
-  if (!Number.isFinite(scale) || scale <= 0 || (!mobile && requested > limit)) {
+  const scale = fitToLimit ? Math.min(requested, limit) : requested;
+  if (!Number.isFinite(scale) || scale <= 0 || (!fitToLimit && requested > limit)) {
     throw new Error('This page is too large at the selected DPI. Choose a lower DPI.');
   }
   const limited = scale < requested;

@@ -42,6 +42,8 @@ FileKit distributes the 344,799-byte checkpoint without changes. The worker veri
 
 The deployed [licenses page](/about/licenses/) links to the complete license texts. See [PDF fixture provenance](test/fixtures/pdf/SOURCES.md).
 
+The PDF editor serves [Lato](https://github.com/google/fonts/tree/5026800714d07231937d92eb4cceabf06e05d74e/ofl/lato), [Crimson Text](https://github.com/google/fonts/tree/5026800714d07231937d92eb4cceabf06e05d74e/ofl/crimsontext), [IBM Plex Mono](https://github.com/google/fonts/tree/5026800714d07231937d92eb4cceabf06e05d74e/ofl/ibmplexmono), [Pacifico](https://github.com/google/fonts/tree/5026800714d07231937d92eb4cceabf06e05d74e/ofl/pacifico), and [Great Vibes](https://github.com/google/fonts/tree/5026800714d07231937d92eb4cceabf06e05d74e/ofl/greatvibes) from the same origin. The original TrueType files and [their SIL Open Font License 1.1 notices](licenses/pdf-fonts) are bundled. [@pdf-lib/fontkit 1.1.1](https://github.com/Hopding/fontkit) provides font embedding and subsetting. [MIT license](licenses/pdf/Fontkit-MIT.txt)
+
 ## Interface font
 
 [Inter 4.1](https://github.com/rsms/inter/tree/e3a3d4c57d5ecc01453a575621882a384c1995a3) is copyright The Inter Project Authors and distributed under the SIL Open Font License 1.1. FileKit serves the authors’ variable WOFF2 from its own origin. [License](licenses/inter/Inter-OFL.txt)

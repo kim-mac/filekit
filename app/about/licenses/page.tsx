@@ -48,6 +48,11 @@ export default function LicensesPage() {
           <li><a href="/licenses/pdf/pdf-lib-MIT.txt">pdf-lib · MIT</a></li>
           <li><a href="/licenses/pdf/pdf-lib-standard-fonts-MIT.txt">pdf-lib standard fonts module · MIT</a></li>
           <li><a href="/licenses/pdf/pdf-lib-upng-MIT.txt">pdf-lib UPNG module · MIT</a></li>
+          <li><a href="/licenses/pdf/pdf-lib-fontkit-MIT.txt">pdf-lib fontkit · MIT</a></li>
+          {[
+            ['Lato', 'lato'], ['Crimson Text', 'crimsontext'], ['IBM Plex Mono', 'ibmplexmono'],
+            ['Pacifico', 'pacifico'], ['Great Vibes', 'greatvibes'],
+          ].map(([font, file]) => <li key={file}><a href={`/licenses/pdf-fonts/${file}-OFL.txt`}>{font} · SIL Open Font License 1.1</a></li>)}
           <li><a href="/licenses/pdf/QPDF-Apache-2.0.txt">QPDF · Apache-2.0</a></li>
           <li><a href="/licenses/pdf/QPDF-NOTICE.md">QPDF third-party notices</a></li>
           <li><a href="/licenses/pdf/qpdf-wasm-ISC.txt">QPDF WASM wrapper · ISC</a></li>

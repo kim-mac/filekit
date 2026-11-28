@@ -1,32 +1,38 @@
 import { Minus, Plus } from 'lucide-react';
-import { useEffect, useState, type CSSProperties } from 'react';
-import type { PageRef } from '../../../lib/tools/pdf/pages';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { pageRenderKey, type PageRef } from '../../../lib/tools/pdf/pages';
 import type { PreviewResult } from '../../../lib/workers/pdf/types';
 import { Button } from '../../ui/button';
 import { Notice } from '../../ui/notice';
 import { useObjectUrl } from '../use-object-url';
 import { usePreviewView } from '../use-preview-view';
+import { PdfEditLayer } from './pdf-edit-layer';
+import type { PdfEditor } from './use-pdf-editor';
 
-export function SinglePage({ page, number, render }: {
+export function SinglePage({ page, number, render, editor }: {
   page: PageRef;
   number: number;
   render: (page: PageRef, edge: number) => Promise<PreviewResult>;
+  editor: PdfEditor;
 }) {
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
-  const [preview, setPreview] = useState<{ page: PageRef; value?: PreviewResult }>();
-  const current = preview?.page === page ? preview : undefined;
+  const [preview, setPreview] = useState<{ key: string; value?: PreviewResult }>();
+  const key = pageRenderKey(page);
+  const current = preview?.key === key ? preview : undefined;
+  const pageRef = useRef(page);
+  pageRef.current = page;
   const value = current?.value;
   const url = useObjectUrl(value?.blob);
   const viewport = usePreviewView(stage, value?.size, page.id);
   useEffect(() => {
     let live = true;
-    void render(page, 2048).then(result => {
-      if (live) setPreview({ page, value: result });
+    void render(pageRef.current, 2048).then(result => {
+      if (live) setPreview({ key, value: result });
     }, () => {
-      if (live) setPreview({ page });
+      if (live) setPreview({ key });
     });
     return () => { live = false; };
-  }, [page, render]);
+  }, [key, render]);
   return <>
     <div ref={setStage} className={`preview-stage pdf-single ${url ? 'is-loaded' : ''} ${viewport.panning ? 'is-panning' : ''}`}
       aria-busy={!current}>
@@ -35,6 +41,7 @@ export function SinglePage({ page, number, render }: {
       }}>
         <div className="preview-media" style={{ '--preview-ratio': value.size.width / value.size.height } as CSSProperties}>
           <img src={url} alt={`Preview of page ${number}`} draggable={false} />
+          <PdfEditLayer key={page.id} editor={editor} preview={value} />
         </div>
       </div>}
       {!current && <p className="section-note" role="status">Rendering page {number}…</p>}
