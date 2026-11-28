@@ -13,8 +13,8 @@ export interface PdfDetails {
 }
 
 export type IntakeResult =
-  | { kind: 'pdf'; details: PdfDetails; unlocked?: Blob }
-  | { kind: 'image'; thumbnail?: Blob }
+  | { kind: 'pdf'; details: PdfDetails; unlocked?: Blob; canRender: boolean }
+  | { kind: 'image'; thumbnail?: Blob; canRender: boolean }
   | { kind: 'password'; incorrect: boolean };
 
 export interface PreviewResult {
@@ -49,6 +49,7 @@ export interface PdfWorkerApi {
   inspect(id: string, file: File, kind: 'pdf' | 'image', password: string | undefined, mobile: boolean,
     report: ReportPdfProgress): Promise<IntakeResult>;
   preview(ref: PageRef, blob: Blob | undefined, edge: number, mobile: boolean): Promise<PreviewResult>;
+  size(ref: PageRef, blob: Blob | undefined, mobile: boolean): Promise<PageSize>;
   retain(ids: string[]): Promise<void>;
   export(request: ExportRequest, report: ReportPdfProgress): Promise<ExportResult>;
 }

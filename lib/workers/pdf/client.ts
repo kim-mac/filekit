@@ -40,6 +40,10 @@ export class PdfWorkerClient {
     return this.call(worker => worker.preview(page, source, edge, mobile));
   }
 
+  size(page: PageRef, source: Blob | undefined, mobile: boolean) {
+    return this.call(worker => worker.size(page, source, mobile));
+  }
+
   retain(ids: string[]) {
     if (this.remote) void this.call(worker => worker.retain(ids)).catch(() => {});
   }

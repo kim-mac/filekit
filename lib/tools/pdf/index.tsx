@@ -21,6 +21,7 @@ export interface PdfToolContext {
   selected: readonly PageRef[];
   documents: readonly OpenDocument[];
   mobile: boolean;
+  canRender: boolean;
 }
 
 type ToolResult =
@@ -242,7 +243,8 @@ const raster: PdfTool<RasterOptions> = {
     const { format, dpi } = fieldValue(value);
     return { format: choice(format, ['png', 'jpeg', 'webp'], 'png'), dpi: dpi === 72 || dpi === 300 ? dpi : 150 };
   },
-  getApplyError(_value, { selected }) {
+  getApplyError(_value, { selected, canRender }) {
+    if (!canRender) return 'Open this PDF in another browser to export page images.';
     if (!selected.length) return 'Select at least one page.';
   },
   OptionsPanel({ value, context, onChange }) {
@@ -253,7 +255,9 @@ const raster: PdfTool<RasterOptions> = {
       <Choice label="Resolution (DPI)" value={value.dpi} onChange={event => onChange({ ...value, dpi: Number(event.target.value) as RasterOptions['dpi'] })}>
         <option value={72}>72</option><option value={150}>150</option><option value={300}>300</option>
       </Choice>
-      <p className="section-note">{context.selected.length > 1 ? 'Multiple page images download as a ZIP.' : 'Choose the pages to export in Preview.'}
+      <p className="section-note">{context.canRender
+        ? context.selected.length > 1 ? 'Multiple page images download as a ZIP.' : 'Choose the pages to export in Preview.'
+        : 'Open this PDF in another browser to export page images.'}
         {context.mobile && ' Mobile limits each image to 16 MP and 8,192 pixels per side.'}</p>
     </div>;
   },

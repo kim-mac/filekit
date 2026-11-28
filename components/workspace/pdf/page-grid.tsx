@@ -18,7 +18,7 @@ interface GridProps {
   pages: readonly PageRef[];
   selected: ReadonlySet<string>;
   locked: boolean;
-  render: (page: PageRef, edge: number) => Promise<PreviewResult>;
+  render?: (page: PageRef, edge: number) => Promise<PreviewResult>;
   onSelect: (id: string, range: boolean, toggle: boolean) => void;
   onSelectAll: () => void;
   onOpen: (id: string) => void;
@@ -89,7 +89,7 @@ export function PageGrid({ pages, selected, locked, render, onSelect, onSelectAl
   });
 
   useEffect(() => {
-    if (locked || request.current || !next || !nextKey) return;
+    if (locked || request.current || !next || !nextKey || !render) return;
     request.current = true;
     void render(next, 228).then(result => result.blob, () => null).then(blob => {
       request.current = false;

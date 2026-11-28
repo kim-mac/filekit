@@ -30,6 +30,7 @@ expose({
     const render = await getRenderer();
     return render.preview(page, source, edge, mobile);
   }),
+  size: (page, source, mobile) => serial(async () => (await getRenderer()).size(page, source, mobile)),
   retain: ids => serial(async () => { await (await renderer)?.retain(ids); }),
   export: (request, report) => reportUntilDone(report, () => exportPdf(request, report, getRenderer)),
 } satisfies PdfWorkerApi);

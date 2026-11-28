@@ -37,6 +37,7 @@ export function usePdfDocuments(mobile: boolean) {
   const [passwordId, setPasswordId] = useState<string>();
   const [passwordError, setPasswordError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
+  const [canRender, setCanRender] = useState(true);
   const sources = useRef(new Map<string, LocalSource>());
   const live = useRef(false);
   const canUnlock = useRef(true);
@@ -66,6 +67,7 @@ export function usePdfDocuments(mobile: boolean) {
       return;
     }
     const details = result.kind === 'pdf' ? result.details : undefined;
+    setCanRender(result.canRender);
     const count = details?.count ?? 1;
     sources.current.set(id, {
       blob: result.kind === 'pdf' ? result.unlocked ?? file : file,
@@ -126,6 +128,10 @@ export function usePdfDocuments(mobile: boolean) {
   const render = useCallback((page: PageRef, edge: number) => {
     const source = page.kind === 'blank' ? undefined : sources.current.get(page.source)?.blob;
     return client.preview(page, source, edge, mobile);
+  }, [client, mobile]);
+  const size = useCallback((page: PageRef) => {
+    const source = page.kind === 'blank' ? undefined : sources.current.get(page.source)?.blob;
+    return client.size(page, source, mobile);
   }, [client, mobile]);
 
   function addFiles(files: readonly File[]) {
@@ -217,7 +223,7 @@ export function usePdfDocuments(mobile: boolean) {
   }
 
   return {
-    entries, selected, work, lockedFile, passwordError, unlocking, sources: sources.current,
-    addFiles, select, closePassword, unlock, remove, move, edit, addDocument, setEntry, render,
+    entries, selected, work, lockedFile, passwordError, unlocking, canRender, sources: sources.current,
+    addFiles, select, closePassword, unlock, remove, move, edit, addDocument, setEntry, render, size,
   };
 }

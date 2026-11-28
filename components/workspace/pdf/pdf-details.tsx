@@ -4,18 +4,17 @@ import { useEffect, useState } from 'react';
 import type { PageSize } from '../../../lib/tools/pdf/layout';
 import type { PageRef } from '../../../lib/tools/pdf/pages';
 import { formatBytes } from '../../../lib/tools/image/size-estimate';
-import type { PreviewResult } from '../../../lib/workers/pdf/types';
 import { Button } from '../../ui/button';
 import type { PdfEntry } from './use-pdf-documents';
 
 const points = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
-export function PdfDetails({ entry, count, page, bytes, render }: {
+export function PdfDetails({ entry, count, page, bytes, getSize }: {
   entry: PdfEntry;
   count: number;
   page: PageRef;
   bytes?: number;
-  render: (page: PageRef, edge: number) => Promise<PreviewResult>;
+  getSize: (page: PageRef) => Promise<PageSize>;
 }) {
   const [open, setOpen] = useState(false);
   const [dimensions, setDimensions] = useState<{ page: PageRef; size?: PageSize }>();
@@ -24,13 +23,13 @@ export function PdfDetails({ entry, count, page, bytes, render }: {
   useEffect(() => {
     if (!open) return;
     let current = true;
-    void render(page, 80).then(({ size }) => {
+    void getSize(page).then(size => {
       if (current) setDimensions({ page, size });
     }, () => {
       if (current) setDimensions({ page });
     });
     return () => { current = false; };
-  }, [open, page, render]);
+  }, [open, page, getSize]);
   const data = [
     ['Pages', String(count)],
     ['Page size', size ? `${points.format(size.width)} × ${points.format(size.height)} pt`

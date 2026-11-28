@@ -13,7 +13,9 @@ test.describe.configure({ timeout: 45_000 });
 
 async function open(page: Page, ...names: string[]) {
   await page.goto('/pdf/');
-  await page.getByLabel('PDF and image files').setInputFiles(names.map(fixturePath));
+  const picker = page.getByLabel('PDF and image files');
+  await expect(picker).toBeEnabled({ timeout: 15_000 });
+  await picker.setInputFiles(names.map(fixturePath));
   if (names.length && !names[0].includes('encrypted')) await expect(pageButton(page, 1)).toBeVisible({ timeout: 15_000 });
 }
 
@@ -54,18 +56,33 @@ test('organizes, previews and exports edited pages', async ({ page }) => {
   expect(pdf.getPages().map(item => [item.getWidth(), item.getRotation().angle])).toEqual([[350, 90], [300, 180], [300, 0]]);
 });
 
-test('drags pages within a PDF and onto another file', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'Mouse drag. The workflow also covers the keyboard reorder and insert controls.');
-  await page.setViewportSize({ width: 1280, height: 1080 });
+test('drags pages with a mouse or touch and copies pages between desktop files', async ({ page, isMobile, browserName }) => {
+  test.skip(isMobile && browserName !== 'chromium', 'The touch drag driver uses Chromium CDP. Keyboard reorder runs on every project.');
+  if (!isMobile) await page.setViewportSize({ width: 1280, height: 1080 });
   await open(page, 'pdf/mixed.pdf', 'pdf/scan.pdf');
   await expect(pageButton(page, 1)).toBeVisible();
   const source = (await page.getByRole('button', { name: 'Drag page 1' }).boundingBox())!;
   const target = (await pageButton(page, 2).boundingBox())!;
-  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + target.width * .8, target.y + target.height / 2, { steps: 8 });
-  await page.mouse.up();
+  const start = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+  const end = { x: target.x + target.width * .8, y: target.y + target.height / 2 };
+  if (isMobile) {
+    const session = await page.context().newCDPSession(page);
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
+    for (let step = 1; step <= 8; step++) {
+      await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [
+        { x: start.x + (end.x - start.x) * step / 8, y: start.y + (end.y - start.y) * step / 8 },
+      ] });
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await session.detach();
+  } else {
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x, end.y, { steps: 8 });
+    await page.mouse.up();
+  }
   await expect(pageButton(page, 2)).toHaveAttribute('aria-pressed', 'true');
+  if (isMobile) return;
   const tile = files(page).getByRole('button', { name: /^scan\.pdf/ });
   await expect(tile).toContainText('1 page');
   await tile.scrollIntoViewIfNeeded();
@@ -155,7 +172,9 @@ test('requests only static same-origin assets when loading, unlocking and raster
   await page.goto('/pdf/');
   await expect(page.getByRole('heading', { name: 'PDF', level: 1, exact: true })).toBeVisible();
   expect([...urls].filter(url => /\/workers\//.test(url))).toEqual([]);
-  await page.getByLabel('PDF and image files').setInputFiles([fixturePath('pdf/encrypted.pdf'), fixturePath('pdf/mixed.pdf')]);
+  const picker = page.getByLabel('PDF and image files');
+  await expect(picker).toBeEnabled();
+  await picker.setInputFiles([fixturePath('pdf/encrypted.pdf'), fixturePath('pdf/mixed.pdf')]);
   const dialog = page.getByRole('dialog', { name: 'Unlock PDF' });
   await dialog.getByLabel('Password', { exact: true }).fill('filekit-test');
   await dialog.getByRole('button', { name: 'Unlock' }).click();
@@ -191,15 +210,25 @@ test('virtualizes a 321-page PDF and keeps navigation responsive', async ({ page
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`PDF workspace is accessible in ${colorScheme} mode`, async ({ page }, info) => {
+  test(`PDF workspace is accessible in ${colorScheme} mode`, async ({ page, isMobile }, info) => {
+    // Match the existing desktop and touch axe sweep. Firefox 1572 can crash while axe reads ARIA labels.
+    test.skip(!['desktop-chromium', 'android-chromium'].includes(info.project.name), 'Axe sweep on desktop and touch Chromium');
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
     await open(page, 'pdf/mixed.pdf');
     await expect(page.getByRole('region', { name: 'Preview' }).locator('img')).toHaveCount(4);
     await waitForFonts(page);
-    const { violations } = await new AxeBuilder({ page }).analyze();
+    const original = page.viewportSize()!;
+    for (const width of isMobile ? [360] : [360, 768, 1024, 1280, 1440]) {
+      await page.setViewportSize({ width, height: original.height });
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+    }
+    await page.setViewportSize(original);
+    const { violations } = await new AxeBuilder({ page }).setLegacyMode().analyze();
     expect(violations.filter(({ impact }) => impact === 'serious' || impact === 'critical')).toEqual([]);
-    if (['desktop-chromium', 'android-chromium'].includes(info.project.name)) {
-      await page.screenshot({ path: info.outputPath(`pdf-workspace-${colorScheme}.png`), fullPage: true });
+    const screenshot = `pdf-workspace-${colorScheme}.png`;
+    await page.screenshot({ path: info.outputPath(screenshot), fullPage: true, animations: 'disabled' });
+    if (process.platform === 'linux') {
+      await expect(page).toHaveScreenshot(screenshot, { fullPage: true, maxDiffPixelRatio: .01 });
     }
   });
 }

@@ -165,6 +165,8 @@ The PDF route uses the same workspace layout, file strip, tool registry, progres
 
 The Comlink worker lazy-loads PDF.js on first intake or preview. PDF.js parses in its own same-origin worker and draws in the Comlink worker. The grid renders visible thumbnails serially, retains a bounded set of 48 thumbnail blobs, and revokes object URLs when thumbnails leave the grid. The worker keeps up to two parsed PDFs within a 48 MiB source budget, with room for one active original above that budget. Fonts, CMaps, ICC profiles, and decoder WASM are packaged with PDF.js and loaded on demand. QPDF WASM unlocks encrypted documents in local memory after PDF.js validates the password. Exports of unlocked documents are unencrypted.
 
+Browsers without worker canvas support still show page numbers and details and can organize and export PDFs. Preview and image export require worker canvas support.
+
 The export worker uses pdf-lib to reuse vector and text content. It retains the primary document catalog when all of its pages remain, remaps internal links and bookmarks when copying pages, and removes unreachable PDF objects after extraction. Imported form pages retain their appearances when possible. Export preserves primary metadata by default and offers an option to remove PDF Info and XMP metadata. Image inputs use the same EXIF-aware WASM decoders as Images. For PDF to images, PDF.js renders tiles into a pixel buffer and the existing WASM codecs write PNG, JPG, or WebP. Mobile limits each image to 16 MP and 8,192 pixels per side. Desktop preserves the selected DPI up to 64 MP and 16,380 pixels per side, with an error prompting a lower DPI for larger pages. Multi-file exports stream completed files into a ZIP.
 
 ## Testing plan

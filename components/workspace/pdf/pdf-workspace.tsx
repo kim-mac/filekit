@@ -35,8 +35,9 @@ interface Selection { document: string; ids: Set<string>; anchor: string; focus:
 interface Download extends ExportResult { document: string; direct: boolean; pdf: boolean }
 
 export function PdfWorkspace() {
-  const [mobile, setMobile] = useState(false);
-  useEffect(() => setMobile(isMobileDevice()), []);
+  const [device, setDevice] = useState<'desktop' | 'mobile'>();
+  useEffect(() => setDevice(isMobileDevice() ? 'mobile' : 'desktop'), []);
+  const mobile = device === 'mobile';
   const documents = usePdfDocuments(mobile);
   const { entries, selected, work, sources } = documents;
   const [exporter] = useState(() => new PdfWorkerClient());
@@ -68,7 +69,9 @@ export function PdfWorkspace() {
   const chosenPages = pages.filter(page => chosen.has(page.id));
   const pageIndex = Math.max(0, pages.findIndex(page => page.id === (selectionHere?.focus ?? first)));
   const currentView = selectionHere ? view : 'grid';
-  const context = ready && activeId ? { activeId, pages, selected: chosenPages, documents: openFiles, mobile } satisfies PdfToolContext : undefined;
+  const { canRender } = documents;
+  const context = ready && activeId
+    ? { activeId, pages, selected: chosenPages, documents: openFiles, mobile, canRender } satisfies PdfToolContext : undefined;
   const primarySources = new Set(pages.flatMap(page => page.kind === 'blank' ? [] : [page.source]));
   const containsEncrypted = [...primarySources].some(source => sources.get(source)?.encrypted);
   const containsForms = [...primarySources].some(source => sources.get(source)?.forms);
@@ -249,8 +252,8 @@ export function PdfWorkspace() {
 
   return (
     <WorkspaceShell title="PDF" description="Organize and export PDF pages on your device." icon={FileText}
-      locked={locked} onFiles={documents.addFiles} picker={<input ref={picker} aria-label="PDF and image files" type="file"
-        multiple accept={accepted} hidden onChange={event => {
+      locked={locked || !device} onFiles={documents.addFiles} picker={<input ref={picker} aria-label="PDF and image files" type="file"
+        multiple accept={accepted} disabled={locked || !device} hidden onChange={event => {
           documents.addFiles(Array.from(event.currentTarget.files ?? []));
           event.currentTarget.value = '';
         }} />}>
@@ -260,14 +263,14 @@ export function PdfWorkspace() {
           {ready && <div className="preview-controls">
             <Button type="button" size="sm" variant="outline" aria-pressed={currentView === 'grid'}
               onClick={() => setView('grid')}>Page grid</Button>
-            <Button type="button" size="sm" variant="outline" aria-pressed={currentView === 'single'} onClick={() => {
+            <Button type="button" size="sm" variant="outline" aria-pressed={currentView === 'single'} disabled={!canRender} onClick={() => {
               if (!selectionHere) focusPage(pageIndex);
               setView('single');
             }}>Single page</Button>
           </div>}
         </div>
         {!selected && <div className="preview-stage">
-          <button ref={emptyPicker} type="button" className="empty-state empty-picker" onClick={() => picker.current?.click()}>
+          <button ref={emptyPicker} type="button" className="empty-state empty-picker" disabled={!device} onClick={() => picker.current?.click()}>
             <span className="empty-icon"><FilePlus2 size={30} aria-hidden /></span>
             <strong>Drop PDFs or images here</strong><span><b>Choose files</b> from your device</span>
             <small>PDF, JPG, PNG, WebP, AVIF, GIF, HEIC</small>
@@ -290,8 +293,9 @@ export function PdfWorkspace() {
                 disabled={locked || !chosenPages.length || chosenPages.at(-1) === pages.at(-1)} onClick={() => nudge(1)}><ArrowRight aria-hidden /></Button>
             </div>
           </div>
-          <PageGrid key={activeId} pages={pages} selected={chosen} locked={locked} render={documents.render}
+          <PageGrid key={activeId} pages={pages} selected={chosen} locked={locked} render={canRender ? documents.render : undefined}
             onSelect={selectPage} onSelectAll={selectAll} onOpen={id => {
+              if (!canRender) return;
               focusPage(pages.findIndex(page => page.id === id));
               setView('single');
             }} onMove={movePage} onInsert={insertPage} onFileTarget={setDragTarget} />
@@ -310,7 +314,7 @@ export function PdfWorkspace() {
         {ready && selected && <div className="preview-footer">
           <div className="preview-facts"><span>{pageCount(pages.length)}</span>{pages[pageIndex] &&
             <PdfDetails entry={selected} count={pages.length} page={pages[pageIndex]}
-              render={documents.render} bytes={selected.stack.original.size || undefined} />}</div>
+              getSize={documents.size} bytes={selected.stack.original.size || undefined} />}</div>
           <div className="history-buttons" role="group" aria-label="Edit history">
             <Button variant="ghost" size="icon" aria-label="Undo" title="Undo (Ctrl/⌘ Z)"
               disabled={locked || selected.stack.cursor === 0} onClick={() => changeHistory('undo')}><Undo2 aria-hidden /></Button>
@@ -319,6 +323,7 @@ export function PdfWorkspace() {
           </div>
         </div>}
         {large && <Notice announce={false}>Large document. Thumbnails load as you scroll. Exports can take longer on this device.</Notice>}
+        {ready && !canRender && <Notice variant="warning">Page previews are unavailable in this browser. You can still organize and export PDFs.</Notice>}
       </Card>
 
       <FilesStrip listRef={fileStrip} locked={locked} onAdd={() => picker.current?.click()} addLabel="Add more PDFs or images"

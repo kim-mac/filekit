@@ -13,10 +13,19 @@ const assetRoot = new URL('/workers/pdf/', self.location.origin).href;
 type Surface = { canvas: OffscreenCanvas; context: OffscreenCanvasRenderingContext2D };
 
 function surface(width: number, height: number): Surface {
+  if (typeof OffscreenCanvas === 'undefined') throw new Error('This browser cannot render PDF pages in a worker.');
   const canvas = new OffscreenCanvas(width, height);
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) throw new Error('This browser could not create a PDF rendering surface.');
   return { canvas, context };
+}
+
+function hasWorkerCanvas() {
+  try {
+    return Boolean(surface(1, 1));
+  } catch {
+    return false;
+  }
 }
 
 class WorkerCanvasFactory {
@@ -84,6 +93,7 @@ const sourceBudget = 48 * 1024 * 1024;
 export class PdfRenderer {
   private readonly documents = new Map<string, { blob: Blob; task: ReturnType<typeof load> }>();
   private image?: { id: string; size: PageSize; preview: ImageData };
+  private readonly canRender = hasWorkerCanvas();
 
   async retain(ids: string[]) {
     const retained = new Set(ids);
@@ -133,8 +143,9 @@ export class PdfRenderer {
     if (kind === 'image') {
       await this.imagePreview(id, file);
       report({ message: 'Drawing image preview', step: 3, totalSteps: 3 });
-      const thumbnail = await this.preview(imagePage(id), file, 160, mobile).then(value => value.blob).catch(() => undefined);
-      return { kind: 'image', thumbnail };
+      const thumbnail = this.canRender
+        ? await this.preview(imagePage(id), file, 160, mobile).then(value => value.blob).catch(() => undefined) : undefined;
+      return { kind: 'image', thumbnail, canRender: this.canRender };
     }
     let task: ReturnType<typeof load> | undefined;
     try {
@@ -160,7 +171,7 @@ export class PdfRenderer {
       // A reopened document uses the in-memory unlocked copy and never needs the password again.
       if (unlocked) await task.destroy();
       else await this.remember(id, file, task);
-      return { kind: 'pdf', details, unlocked };
+      return { kind: 'pdf', details, unlocked, canRender: this.canRender };
     } catch (error) {
       await task?.destroy();
       if (error instanceof PasswordException) {
@@ -196,6 +207,18 @@ export class PdfRenderer {
     }
     const { size, preview } = await this.imagePreview(ref.source, blob!);
     return imagePreview(ref, size, preview, edge);
+  }
+
+  async size(ref: PageRef, blob: Blob | undefined, mobile: boolean): Promise<PageSize> {
+    if (ref.kind === 'blank') return rotatedSize(ref.size, ref.rotation);
+    if (ref.kind === 'image') {
+      const { size } = await this.imagePreview(ref.source, blob!);
+      return rotatedSize(imagePlacement(size.width, size.height, ref.layout), ref.rotation);
+    }
+    const pdf = await this.document(ref.source, blob!, mobile);
+    const page = await pdf.getPage(ref.index + 1);
+    const { width, height } = page.getViewport({ scale: 1, rotation: rotationDegrees(page.rotate + ref.rotation) });
+    return { width, height };
   }
 
   async raster(ref: PageRef, blob: Blob | undefined, options: RasterOptions & { mobile: boolean }) {
