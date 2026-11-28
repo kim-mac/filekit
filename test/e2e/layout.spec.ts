@@ -6,8 +6,9 @@ test.use({ colorScheme: 'light' });
 test('home and workspace adapt their layout with the same controls', async ({ page, isMobile }, testInfo) => {
   await page.goto('/');
   await expect(page.getByRole('link', { name: /Images/ })).toBeVisible();
-  await expect(page.getByText('Coming soon', { exact: true })).toHaveCount(3);
-  for (const category of ['PDF', 'Audio', 'Video']) {
+  await expect(page.getByRole('link', { name: /^PDF/ })).toHaveAttribute('href', '/pdf/');
+  await expect(page.getByText('Coming soon', { exact: true })).toHaveCount(2);
+  for (const category of ['Audio', 'Video']) {
     await expect(page.getByRole('heading', { name: category, exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: category, exact: true })).toHaveCount(0);
   }

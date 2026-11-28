@@ -18,6 +18,7 @@ export interface ToolDefinition<Input, Options, Output, Context = undefined> {
     onChange: (options: Options) => void;
   }>;
   readonly defaultOptions: Options;
+  readonly actionLabel?: string;
   readonly rememberOptions?: boolean;
   prepareOptions?(options: Options, context: Context, signal: AbortSignal, onProgress: (update: ToolProgress) => void): Promise<Options>;
   mayTakeAMinute?(options: Options, context: Context): boolean;

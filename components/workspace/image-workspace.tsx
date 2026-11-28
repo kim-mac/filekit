@@ -20,14 +20,15 @@ import { ColorField } from '../ui/color-field';
 import { JobProgress } from '../ui/job-progress';
 import { Notice } from '../ui/notice';
 import { Toggle } from '../ui/toggle';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { FileTile } from './file-tile';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { FilesStrip } from './files-strip';
 import { ImageComparison } from './image-comparison';
 import { ImageDetails } from './image-details';
 import { OutputEstimate, SizeEstimator } from './output-estimate';
 import { usePreviewView } from './use-preview-view';
 import { ToolPanel } from './tool-panel';
 import { useObjectUrl } from './use-object-url';
+import { WorkspaceShell } from './workspace-shell';
 
 interface Entry {
   readonly id: string;
@@ -112,14 +113,9 @@ export function ImageWorkspace() {
   const [exportWarnings, setExportWarnings] = useState<readonly string[]>([]);
   const [dismissedWarnings, setDismissedWarnings] = useState<ReadonlySet<string>>(() => new Set());
   const [fileAnnouncement, setFileAnnouncement] = useState('');
-  const [fileDrag, setFileDrag] = useState<{ id: string; target?: string }>();
-  const dragPosition = useRef<{ id: string; x: number; y: number }>(null);
-  const dragFrame = useRef(0);
-  const [dragging, setDragging] = useState(false);
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const [previewTarget, setPreviewTarget] = useState<HTMLDivElement | null>(null);
   const [draftSize, setDraftSize] = useState<Size>();
-  const dragDepth = useRef(0);
   const picker = useRef<HTMLInputElement>(null);
   const fileStrip = useRef<HTMLUListElement>(null);
   const copyNotice = useRef<HTMLDivElement>(null);
@@ -477,40 +473,6 @@ export function ImageWorkspace() {
     setFileAnnouncement(`${fileName(moved)} moved to position ${destination + 1} of ${entries.length}.`);
   }
 
-  function targetAt({ x, y }: { x: number; y: number }) {
-    return document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-file-id]')?.dataset.fileId;
-  }
-
-  function dragFile(id: string, x: number, y: number) {
-    dragPosition.current = { id, x, y };
-    if (dragFrame.current) return;
-    const update = () => {
-      dragFrame.current = 0;
-      const point = dragPosition.current;
-      const strip = fileStrip.current;
-      if (!point || !strip) return;
-      const bounds = strip.getBoundingClientRect();
-      const direction = point.x < bounds.left + 24 ? -1 : point.x > bounds.right - 24 ? 1 : 0;
-      const offset = strip.scrollLeft;
-      if (direction && point.y >= bounds.top && point.y <= bounds.bottom) strip.scrollLeft += 6 * direction;
-      const target = targetAt(point);
-      setFileDrag(previous => previous?.id === point.id && previous.target === target ? previous : { id: point.id, target });
-      if (strip.scrollLeft !== offset) dragFrame.current = requestAnimationFrame(update);
-    };
-    dragFrame.current = requestAnimationFrame(update);
-  }
-
-  function finishFileDrag(commit: boolean) {
-    const point = dragPosition.current;
-    cancelAnimationFrame(dragFrame.current);
-    dragFrame.current = 0;
-    dragPosition.current = null;
-    setFileDrag(undefined);
-    if (commit && point) moveFile(point.id, entries.findIndex(entry => entry.id === targetAt(point)));
-  }
-
-  useEffect(() => () => cancelAnimationFrame(dragFrame.current), []);
-
   function startExport(kind: ExportJob['kind'], files: readonly Entry[], direct = false) {
     setCopyFeedback(undefined);
     setDownload(undefined);
@@ -530,50 +492,10 @@ export function ImageWorkspace() {
   }
 
   return (
-    <main
-      className={`workspace page-container ${dragging ? 'is-dragging' : ''}`}
-      onDragEnter={(event) => {
-        if (!event.dataTransfer.types.includes('Files')) return;
-        event.preventDefault();
-        dragDepth.current++;
-        if (!jobsLocked) setDragging(true);
-      }}
-      onDragOver={(event) => {
-        if (!event.dataTransfer.types.includes('Files')) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = jobsLocked ? 'none' : 'copy';
-      }}
-      onDragLeave={() => {
-        dragDepth.current = Math.max(0, dragDepth.current - 1);
-        if (dragDepth.current === 0) setDragging(false);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        dragDepth.current = 0;
-        setDragging(false);
-        if (!jobsLocked) addFiles(Array.from(event.dataTransfer.files));
-      }}
-    >
-      <div className="workspace-heading">
-        <div className="workspace-title">
-          <span className="workspace-icon"><Layers size={24} aria-hidden /></span>
-          <div><h1>Images</h1><p>Edit and export images on your device.</p></div>
-        </div>
-        <input
-          ref={picker}
-          aria-label="Image files"
-          type="file"
-          multiple
-          accept={inputFormats}
-          hidden
-          onChange={(event) => {
-            addFiles(Array.from(event.currentTarget.files ?? []));
-            event.currentTarget.value = '';
-          }}
-        />
-      </div>
-      <TooltipProvider delayDuration={500}>
-      <div className="workspace-grid">
+    <WorkspaceShell title="Images" description="Edit and export images on your device." icon={Layers}
+      locked={jobsLocked} onFiles={addFiles}
+      picker={<input ref={picker} aria-label="Image files" type="file" multiple accept={inputFormats} hidden
+        onChange={event => { addFiles(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = ''; }} />}>
         <Card className="workspace-card preview-panel" role="region" aria-labelledby="preview-title"
           onClick={selected ? undefined : event => {
             if (!(event.target as HTMLElement).closest('button')) picker.current?.click();
@@ -670,13 +592,8 @@ export function ImageWorkspace() {
           </div>}
         </Card>
 
-        <Card className="workspace-card file-panel" role="region" aria-labelledby="files-title">
-          <div className="panel-heading"><h2 id="files-title">Files</h2><span className="file-count">{entries.length}</span></div>
-          {entries.length === 0 ? <p className="section-note">Added images appear here.</p> : (
-            <>
-            {entries.length > 1 && <p className="section-note">Drag thumbnails to reorder.</p>}
-            <ul ref={fileStrip} className="file-list" aria-label="Added files" data-touch={isMobileDevice() || undefined} tabIndex={jobsLocked ? 0 : undefined}>
-              {entries.map((entry, index) => {
+        <FilesStrip listRef={fileStrip} locked={jobsLocked} onAdd={() => picker.current?.click()} addLabel="Add more images" empty="Added images appear here."
+          onMove={moveFile} announcement={fileAnnouncement} tiles={entries.map(entry => {
                 const applying = toolBusy && entry.id === activeId;
                 const tileCopyStatus = copyEntry?.id === entry.id ? copyStatus : undefined;
                 const processing = applying || tileCopyStatus === 'copying' || entry.id === exportProgress?.id || entry.id === work?.id;
@@ -688,28 +605,16 @@ export function ImageWorkspace() {
                   : entry.exportError ? 'Export failed'
                   : entry.status === 'ready' ? 'Ready' : entry.status === 'pending' ? 'Queued'
                   : entry.status === 'paused' ? 'Canceled' : 'Could not open';
-                return <FileTile key={entry.id} id={entry.id} name={fileName(entry)} thumbnail={entry.thumbnail}
-                  baseName={entry.baseName ?? originalBaseName(entry.stack.original.name)} extension={fileExtension(entry)}
-                  canMoveLeft={index > 0} canMoveRight={index < entries.length - 1}
-                  dragSource={fileDrag?.id === entry.id} dropTarget={fileDrag?.target === entry.id && fileDrag.id !== entry.id}
-                  onDrag={(x, y) => dragFile(entry.id, x, y)} onDragEnd={finishFileDrag}
-                  onMove={direction => moveFile(entry.id, index + direction)} onRename={name => renameFile(entry, name)}
-                  selected={entry.id === selected?.id} processing={processing} status={status}
-                  error={entry.error || entry.exportError} ready={entry.status === 'ready'} disabled={jobsLocked}
-                  onSelect={() => selectFile(entry.id)} onRemove={() => remove(entry)}
-                  onCopy={canCopy && entry.status === 'ready' ? () => void copyImage(entry) : undefined}
-                  onDownload={() => startExport('image', [entry], true)} />;
-              })}
-              <li className="add-tile">
-                <Button variant="outline" aria-label="Add more images" title="Add more images" disabled={jobsLocked} onClick={() => picker.current?.click()}>
-                  <Plus aria-hidden />
-                </Button>
-              </li>
-            </ul>
-            </>
-          )}
-          <p className="sr-only" role="status">{fileAnnouncement}</p>
-        </Card>
+                return {
+                  id: entry.id, name: fileName(entry), thumbnail: entry.thumbnail,
+                  baseName: entry.baseName ?? originalBaseName(entry.stack.original.name), extension: fileExtension(entry),
+                  selected: entry.id === selected?.id, processing, status,
+                  error: entry.error || entry.exportError, ready: entry.status === 'ready', disabled: jobsLocked,
+                  copyLabel: 'Copy image', onCopy: canCopy && entry.status === 'ready' ? () => void copyImage(entry) : undefined,
+                  onRename: name => renameFile(entry, name), onSelect: () => selectFile(entry.id), onRemove: () => remove(entry),
+                  onDownload: () => startExport('image', [entry], true),
+                };
+              })} />
 
         <aside className="workspace-sidebar" aria-label="Editing and export">
           <Card className="workspace-card settings-panel" role="region" aria-labelledby="tools-title">
@@ -818,8 +723,6 @@ export function ImageWorkspace() {
             </div>
           </Card>
         </aside>
-      </div>
-      </TooltipProvider>
-    </main>
+    </WorkspaceShell>
   );
 }

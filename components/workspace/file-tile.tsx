@@ -6,7 +6,7 @@ import { Button } from '../ui/button';
 import { Notice } from '../ui/notice';
 import { useObjectUrl } from './use-object-url';
 
-interface FileTileProps {
+export interface FileTileProps {
   id: string;
   name: string;
   baseName: string;
@@ -25,6 +25,7 @@ interface FileTileProps {
   onSelect: () => void;
   onDownload: () => void;
   onCopy?: () => void;
+  copyLabel?: string;
   onRemove: () => void;
   onRename: (name: string) => void;
   onMove: (direction: -1 | 1) => void;
@@ -34,7 +35,7 @@ interface FileTileProps {
 
 export function FileTile({
   id, name, baseName, extension, thumbnail, selected, status, processing, error, disabled, ready,
-  canMoveLeft, canMoveRight, dragSource, dropTarget, onSelect, onDownload, onCopy, onRemove, onRename, onMove, onDrag, onDragEnd,
+  canMoveLeft, canMoveRight, dragSource, dropTarget, onSelect, onDownload, onCopy, copyLabel, onRemove, onRename, onMove, onDrag, onDragEnd,
 }: FileTileProps) {
   const url = useObjectUrl(thumbnail);
   const [draft, setDraft] = useState<string>();
@@ -139,7 +140,7 @@ export function FileTile({
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content className="file-menu" sideOffset={4} align="start">
-                    <DropdownMenu.Item disabled={!onCopy} onSelect={onCopy}><Copy size={16} aria-hidden /> Copy image</DropdownMenu.Item>
+                    {copyLabel && <DropdownMenu.Item disabled={!onCopy} onSelect={onCopy}><Copy size={16} aria-hidden /> {copyLabel}</DropdownMenu.Item>}
                     <DropdownMenu.Item disabled={!canMoveLeft} onSelect={() => onMove(-1)}><ArrowLeft size={16} aria-hidden /> Move left</DropdownMenu.Item>
                     <DropdownMenu.Item disabled={!canMoveRight} onSelect={() => onMove(1)}><ArrowRight size={16} aria-hidden /> Move right</DropdownMenu.Item>
                   </DropdownMenu.Content>

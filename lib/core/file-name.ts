@@ -6,7 +6,7 @@ export function sanitizeBaseName(input: string): string {
   return reservedName.test(name) ? `_${name}` : name;
 }
 
-export function originalBaseName(name: string): string {
+export function originalBaseName(name: string, fallback = 'image'): string {
   const extension = name.lastIndexOf('.');
-  return sanitizeBaseName(extension >= 0 ? name.slice(0, extension) : name) || 'image';
+  return sanitizeBaseName(extension >= 0 ? name.slice(0, extension) : name) || fallback;
 }

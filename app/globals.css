@@ -573,3 +573,66 @@ button, a, label { touch-action: manipulation; }
 .license-card h2 { margin-top: 12px; font-size: .98rem; font-weight: 690; }
 .license-card p, .license-card li { font-size: var(--text-body); overflow-wrap: anywhere; }
 .license-card a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; }
+.pdf-preview .preview-controls [aria-pressed="true"],
+.pdf-selection [aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--control-line);
+  color: var(--ink);
+}
+
+.pdf-field { display: grid; font-weight: 650; }
+.pdf-field :is(input, select) { min-height: 44px; font-weight: 500; }
+.pdf-field input {
+  width: 100%; min-width: 0; padding: 4px 8px;
+  border: 1px solid var(--control-line); border-radius: 6px; background: var(--surface); color: var(--ink);
+}
+.pdf-field option { color: var(--ink); background: var(--surface); }
+.pdf-actions { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
+.pdf-actions > span { color: var(--muted); font-size: var(--text-helper); font-variant-numeric: tabular-nums; }
+.pdf-move { display: flex; margin-inline-start: auto; }
+.pdf-selection button, .pdf-page-navigation button, .pdf-preview .preview-controls button { min-height: 44px; }
+.pdf-page-navigation { justify-content: center; }
+.pdf-preview .pdf-single { border-style: solid; }
+.pdf-preview .pdf-single .preview-media { background: white; box-shadow: 0 2px 10px rgb(0 0 0 / .2); }
+
+.pdf-grid {
+  position: relative; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+  height: clamp(320px, 50svh, 630px); padding: 8px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--stage);
+}
+.pdf-track { position: relative; min-width: 0; }
+.pdf-cell { position: absolute; height: 148px; }
+.pdf-select-page {
+  display: grid; grid-template-rows: minmax(0, 1fr) auto; justify-items: center; gap: 4px;
+  width: 100%; height: 100%; padding: 7px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--ink);
+}
+.pdf-select-page:hover { border-color: var(--control-line); }
+.pdf-select-page[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.pdf-select-page:focus-visible { outline-offset: -3px; }
+.pdf-thumbnail img, .pdf-thumbnail i { pointer-events: none; }
+.pdf-thumbnail {
+  display: grid; place-items: center; width: 100%; min-height: 0; padding: 4px;
+  font-size: var(--text-helper); color: var(--muted);
+}
+.pdf-thumbnail img { display: block; max-width: 100%; max-height: 106px; object-fit: contain; box-shadow: 0 1px 5px rgb(0 0 0 / .18); }
+.pdf-thumbnail i { width: 54%; height: 88%; background: var(--stage); border-radius: 4px; }
+.pdf-page-number { font-variant-numeric: tabular-nums; font-size: var(--text-helper); font-weight: 650; }
+.pdf-drag-page[data-slot="button"] { position: absolute; top: 2px; right: 2px; width: 44px; height: 44px; cursor: grab; touch-action: none; }
+.pdf-drag-page:active { cursor: grabbing; }
+.pdf-cell[data-drop]::after { content: ''; position: absolute; top: 0; bottom: 0; width: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+.pdf-cell[data-drop="before"]::after { left: -5px; }
+.pdf-cell[data-drop="after"]::after { right: -5px; }
+.pdf-checkbox { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--text-body); }
+.pdf-checkbox input { width: 17px; height: 17px; accent-color: var(--ink); }
+.pdf-dialog-overlay { position: fixed; z-index: 60; inset: 0; background: rgb(0 0 0 / .55); }
+.pdf-dialog {
+  display: grid; gap: 12px; position: fixed; top: 50%; left: 50%; z-index: 61; translate: -50% -50%;
+  width: min(410px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto;
+  padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink);
+}
+.pdf-dialog h2 { font-size: var(--text-title); font-weight: 720; }
+.pdf-dialog p { font-size: var(--text-body); color: var(--muted); overflow-wrap: anywhere; }
+@media (pointer: coarse) {
+  .pdf-field input { font-size: 16px; }
+}

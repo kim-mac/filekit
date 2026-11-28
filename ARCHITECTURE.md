@@ -41,7 +41,7 @@ For background removal, capable desktop hardware uses full BiRefNet through bg0 
 
 ## Phase 1 workspace
 
-- The home page links the Images card to the workspace and marks PDF, Audio, and Video as **Coming soon**.
+- The home page links to the Images and PDF workspaces. Audio and Video remain marked **Coming soon**.
 - The interface uses local shadcn/ui source components with Tailwind v4 tokens and monochrome system light/dark color schemes. Inter, icons and component scripts are served from FileKit.
 - Desktop places Files directly below Preview and stacks Tools above Export at the side. Mobile orders Preview, Tools, Files and Export. The empty Preview opens the file picker and accepts drop or paste. After intake, a plus tile opens the picker and the whole workspace accepts drops. The horizontal strip uses bounded worker-generated Blob thumbnails and shows per-file status. Each ready file can download from its own edit history without changing the selection. Thumbnail actions appear on hover, on keyboard focus, and on touch.
 - The Files strip stores order and optional output base names beside the edit stacks. Preview navigation and ZIP export use the same order. The worker adds the resolved format extension and disambiguates ZIP names before writing entries.
@@ -158,6 +158,14 @@ Upscale records a 2× or 4× operation in the edit stack. In the worker, each up
 Photo uses Real-ESRGAN General and Graphics uses Real-ESRGAN Anime. Desktop tries hardware WebGPU, then restarts the current inference with WASM if WebGPU fails. Mobile uses smaller WASM tiles and a smaller thread pool. A tile reads its overlap plus the model's full receptive-field halo. The worker feathers RGB across neighbors into the output raster and interpolates alpha independently. The native model runs at 4×. A 2× edit averages 2×2 output samples during compositing and avoids allocating an intermediate 4× raster. Upscale caps the output at 64 MP on desktop and 16 MP on mobile. The per-side limits are 16,380 px and 8,192 px, respectively.
 
 Applying Upscale runs a tentative edit in the image worker with per-tile progress. Cancel terminates that worker and the command remains uncommitted. The model loader uses the shared verified-chunk transport and pins both the expected byte length and SHA-256 in the worker bundle. The static export serves model files as content-addressed chunks below 24 MiB and the browser re-verifies cached chunks. [Model choice and timings](docs/upscale-eval.md)
+
+## PDF workspace
+
+The PDF route uses the same workspace layout, file strip, tool registry, progress, and download controls as Images. Each document holds stable references to original pages, images, and blank page sizes. The shared edit stack tracks page operations and replays the current history on export. Merge builds a draft from the Files strip order. Dragging a page onto another PDF copies the selected pages to its end. The Merge panel provides a keyboard and touch alternative.
+
+The Comlink worker lazy-loads PDF.js on first intake or preview. PDF.js parses in its own same-origin worker and draws in the Comlink worker. The grid renders visible thumbnails serially, retains a bounded set of 48 thumbnail blobs, and revokes object URLs when thumbnails leave the grid. The worker keeps up to two parsed PDFs within a 48 MiB source budget, with room for one active original above that budget. Fonts, CMaps, ICC profiles, and decoder WASM are packaged with PDF.js and loaded on demand. QPDF WASM unlocks encrypted documents in local memory after PDF.js validates the password. Exports of unlocked documents are unencrypted.
+
+The export worker uses pdf-lib to reuse vector and text content. It retains the primary document catalog when all of its pages remain, remaps internal links and bookmarks when copying pages, and removes unreachable PDF objects after extraction. Imported form pages retain their appearances when possible. Export preserves primary metadata by default and offers an option to remove PDF Info and XMP metadata. Image inputs use the same EXIF-aware WASM decoders as Images. For PDF to images, PDF.js renders tiles into a pixel buffer and the existing WASM codecs write PNG, JPG, or WebP. Mobile limits each image to 16 MP and 8,192 pixels per side. Desktop preserves the selected DPI up to 64 MP and 16,380 pixels per side, with an error prompting a lower DPI for larger pages. Multi-file exports stream completed files into a ZIP.
 
 ## Testing plan
 
