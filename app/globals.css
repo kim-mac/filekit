@@ -592,6 +592,7 @@ button, a, label { touch-action: manipulation; }
 .pdf-move { display: flex; margin-inline-start: auto; }
 .pdf-selection button, .pdf-page-navigation button, .pdf-preview .preview-controls button { min-height: 44px; }
 .pdf-organize-actions button { min-height: 44px; }
+.file-thumbnail:has(.pdf-file-thumbnail) { background-image: none; }
 .pdf-file-thumbnail { display: grid; place-items: center; width: 100%; height: 65px; }
 .pdf-file-thumbnail img { object-fit: contain; }
 .pdf-page-navigation { justify-content: center; }
@@ -618,7 +619,7 @@ button, a, label { touch-action: manipulation; }
   display: grid; place-items: center; width: 100%; min-height: 0; padding: 4px;
   font-size: var(--text-helper); color: var(--muted);
 }
-.pdf-thumbnail img { display: block; max-width: 100%; max-height: 106px; object-fit: contain; box-shadow: 0 1px 5px rgb(0 0 0 / .18); }
+.pdf-thumbnail img { display: block; max-width: 100%; max-height: 92px; object-fit: contain; box-shadow: 0 1px 5px rgb(0 0 0 / .18); }
 .pdf-thumbnail i { width: 54%; height: 88%; background: var(--stage); border-radius: 4px; }
 .pdf-page-number { font-variant-numeric: tabular-nums; font-size: var(--text-helper); font-weight: 650; }
 .pdf-page-toolbar {

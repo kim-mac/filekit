@@ -344,6 +344,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
     }
     await page.setViewportSize(original);
+    await expect.poll(() => page.locator('.pdf-select-page').evaluateAll(cards => cards.every(card => {
+      const thumbnail = card.querySelector('img')?.getBoundingClientRect();
+      const number = card.querySelector('.pdf-page-number')?.getBoundingClientRect();
+      return thumbnail && number && thumbnail.bottom < number.top;
+    }))).toBe(true);
     const { violations } = await new AxeBuilder({ page }).setLegacyMode().analyze();
     expect(violations.filter(({ impact }) => impact === 'serious' || impact === 'critical')).toEqual([]);
     const cover = files(page).getByRole('button', { name: /^mixed\.pdf/ });
