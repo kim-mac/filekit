@@ -2,12 +2,11 @@
 
 import Link from 'next/link';
 import { ChevronDown, Layers, ShieldCheck } from 'lucide-react';
-import { DropdownMenu } from 'radix-ui';
+import { DropdownMenu, Popover } from 'radix-ui';
 import { useEffect, useState } from 'react';
 import { categories } from '../lib/core/categories';
 import type { Category } from '../lib/core/contracts';
 import { Button } from './ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 function CategorySwitcher({ current }: { current: Category }) {
   const currentName = categories.find(({ id }) => id === current)?.name;
@@ -47,7 +46,6 @@ function CategorySwitcher({ current }: { current: Category }) {
 
 export function SiteHeader({ current }: { current?: Category }) {
   const [scrolled, setScrolled] = useState(false);
-  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   useEffect(() => {
     const update = () => setScrolled(window.scrollY > 0);
@@ -66,19 +64,20 @@ export function SiteHeader({ current }: { current?: Category }) {
       </div>
       <span className="privacy privacy-long"><ShieldCheck size={16} aria-hidden /> Files stay on this device</span>
       <div className="privacy-compact">
-        <TooltipProvider>
-          <Tooltip open={privacyOpen} onOpenChange={setPrivacyOpen}>
-            <TooltipTrigger asChild>
-              <Button className="privacy" variant="secondary" size="icon" aria-label="Files stay on this device" onClick={event => {
-                event.preventDefault();
-                setPrivacyOpen(open => !open);
-              }}>
-                <ShieldCheck aria-hidden />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>Files stay on this device</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Popover.Root>
+          <Popover.Trigger asChild>
+            <Button className="privacy" variant="secondary" size="icon" aria-label="Files stay on this device" title="Files stay on this device">
+              <ShieldCheck aria-hidden />
+            </Button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content align="end" sideOffset={8} aria-label="File privacy"
+              className="z-50 rounded-md bg-foreground px-3 py-1.5 text-xs text-background">
+              Files stay on this device
+              <Popover.Arrow className="fill-foreground" />
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
       </div>
     </header>
   );

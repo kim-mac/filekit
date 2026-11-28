@@ -21,6 +21,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await openImageWorkspace(page);
     await audit('empty workspace');
     if (info.project.name === 'android-chromium') {
+      await page.getByRole('button', { name: 'Files stay on this device' }).tap();
+      await expect(page.getByRole('dialog', { name: 'File privacy' })).toBeVisible();
+      await audit('file privacy details');
+      await page.keyboard.press('Escape');
       await page.getByRole('button', { name: /Switch category/ }).click();
       await expect(page.getByRole('menu', { name: /Switch category/ })).toBeVisible();
       await audit('category dropdown');

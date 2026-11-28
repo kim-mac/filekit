@@ -84,7 +84,9 @@ test('the mobile dropdown fits the logo and privacy badge and supports keyboard 
   expect((await privacy.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   if (isMobile) {
     await privacy.tap();
-    await expect(page.getByRole('tooltip')).toHaveText('Files stay on this device');
+    await expect(page.getByRole('dialog', { name: 'File privacy' })).toHaveText('Files stay on this device');
+    await page.keyboard.press('Escape');
+    await expect(privacy).toBeFocused();
   }
   const trigger = header.getByRole('button', { name: /Switch category/ });
   await expect(trigger).toBeInViewport();
