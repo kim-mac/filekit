@@ -30,10 +30,13 @@ export interface ModelDownload {
   readonly id: string;
   readonly loaded: number;
   readonly total: number;
+  readonly received?: number;
 }
 
 export interface ToolProgress {
   readonly message: string;
-  readonly progress?: number;
+  readonly step: number;
+  readonly totalSteps: number;
+  readonly tiles?: { readonly done: number; readonly total: number };
   readonly download?: ModelDownload;
 }

@@ -1,3 +1,5 @@
+import { isBackgroundModel, type BackgroundModel } from './background-model';
+
 export interface BackgroundMask {
   readonly id: string;
   readonly width: number;
@@ -5,6 +7,8 @@ export interface BackgroundMask {
   readonly alpha: Blob;
   readonly tier: 'Full' | 'Lite';
   readonly provider: 'webgpu' | 'wasm';
+  readonly requestedModel?: BackgroundModel;
+  readonly fellBack?: boolean;
   readonly outputMaxEdge?: number;
 }
 
@@ -26,6 +30,8 @@ export function parseBackground(value: unknown): BackgroundOptions {
     mask.width > 2048 || mask.height > 2048 || !(mask.alpha instanceof Blob) ||
     mask.alpha.size !== mask.width * mask.height || !['Full', 'Lite'].includes(mask.tier) ||
     !['webgpu', 'wasm'].includes(mask.provider) ||
+    (mask.requestedModel !== undefined && !isBackgroundModel(mask.requestedModel)) ||
+    (mask.fellBack !== undefined && typeof mask.fellBack !== 'boolean') ||
     (mask.outputMaxEdge !== undefined && mask.outputMaxEdge !== 1280))) {
     throw new Error('Invalid background mask. Remove the background again.');
   }

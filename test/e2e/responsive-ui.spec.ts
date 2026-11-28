@@ -11,7 +11,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const wideElements = await page.evaluate(() => {
         const width = document.documentElement.clientWidth;
         return [...document.querySelectorAll('main, header, .workspace-card, .panel-heading, .export-buttons, .tool-bar, .option-fields, .notice')]
-          .filter(node => node.getBoundingClientRect().right > width || node.scrollWidth > node.clientWidth + 1)
+          .filter(node => node.getBoundingClientRect().right > width ||
+            (!node.matches('.tool-panel[data-orientation="horizontal"] .tool-bar') && node.scrollWidth > node.clientWidth + 1))
           .map(node => node.className || node.tagName);
       });
       expect(wideElements).toEqual([]);

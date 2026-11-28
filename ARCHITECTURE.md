@@ -143,13 +143,13 @@ The Detect faces button starts a dedicated worker with a preview of the current 
 
 ## Background removal
 
-A disposable Comlink worker invokes the pinned bg0 library. FileKit decodes the original with its existing codecs, makes a bounded PNG for inference, and releases the original raster ahead of the bg0 session. Capable desktops choose Full on hardware WebGPU. Lite is available on WebGPU or WASM, and iOS uses bg0's dedicated quantized Lite worker. Failed Full runs fall back to Lite during inference. A tab marker enables Lite after an interrupted Full run. Canceling tears down the dedicated worker and preserves the current edit history.
+A disposable Comlink worker invokes the pinned bg0 library. FileKit decodes the original with its existing codecs, makes a bounded PNG for inference, and releases the original raster ahead of the bg0 session. Capable desktops choose Full on hardware WebGPU. Lite is available on WebGPU or WASM, and iOS uses bg0's dedicated quantized Lite worker. The device remembers Auto, Best quality, or Fast. Best quality and Fast pin the corresponding bg0 tier. iOS runs quantized Lite. Failed Full runs fall back to Lite, and the panel reports the model that produced the matte. A tab marker enables Lite after an interrupted Full run. Canceling tears down the dedicated worker and preserves the current edit history.
 
 The desktop PNG sent to bg0 is capped at 1,600 px on the long edge and uses bg0's quality refinement. Android and iOS use smaller inference inputs and fast refinement. The stored alpha is a bounded grayscale Blob. Preview and export guide its upscale with the source RGB and unmix nearby background colors at partially transparent edges. Transparent, solid, and blurred backgrounds reuse the same source-space matte. The selected file keeps its latest successful matte for the bg0 model policy and preprocessing options. A committed background edit embeds its compact alpha in history for export. Desktop and Android encode the original edited pixel dimensions. For background removal on the original stage, iOS caps the EXIF-normalized source at a 1,280 px long edge before replay. The control panel displays the active tier and the applicable cap.
 
 The Cloudflare build downloads pinned weights as build inputs and publishes only same-origin assets. It splits large model and runtime assets into files below 24 MiB. The browser checks each chunk against SHA-256 before caching or use. The separately launched benchmark requires `FILEKIT_BENCH=1` and stays outside the Next export. [Integration, data sizes, and laptop testing](docs/bg0-integration.md).
 
-The shared model notice reports the size and progress of actual network downloads for background removal, upscale, and face detection. A verified Cache Storage hit stays quiet.
+The shared model notice reports model bytes and estimates the remaining time from network bytes received. Cached chunks count toward the completed model without affecting the transfer rate. A fully cached model skips the download notice. Processing reports tiles or named steps with elapsed time.
 
 ## Upscale
 

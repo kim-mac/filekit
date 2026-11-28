@@ -162,7 +162,7 @@ test('adds adjustable regions with the local face detector', async ({ page, isMo
   try {
     await action(button('Detect faces'));
     if (gate) {
-      await expect(page.getByText(/One-time model download \(~0\.34 MB\)/)).toBeVisible();
+      await expect(page.getByText(/One-time model download \(~0\.33 MB\)/)).toBeVisible();
       await expect(page.getByRole('progressbar', { name: 'Model download progress' })).toBeVisible();
     }
   } finally {

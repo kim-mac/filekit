@@ -17,9 +17,8 @@ import type { ImageExport, ImageInfo, ImageProgress, PreviewResult } from '../..
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { ColorField } from '../ui/color-field';
-import { ModelDownloadNotice } from '../ui/model-download-notice';
+import { JobProgress } from '../ui/job-progress';
 import { Notice } from '../ui/notice';
-import { Progress } from '../ui/progress';
 import { Toggle } from '../ui/toggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { FileTile } from './file-tile';
@@ -69,8 +68,18 @@ function fileName(entry: Entry) {
   return entry.baseName ? entry.baseName + fileExtension(entry) : entry.stack.original.name;
 }
 
-function jobMessage(update: ImageProgress) {
-  return update.tiles ? `${update.detail} · Tile ${update.tiles.done} of ${update.tiles.total}` : update.detail ?? update.stage;
+function previewJob(upscale: boolean, update?: ImageProgress): ToolProgress {
+  const rendered = update?.stage === 'Rendering preview';
+  const step = rendered ? upscale ? 3 : 2 : update?.stage === 'Upscaling' ? 2 : 1;
+  const message = rendered ? 'Rendering preview' : step === 2 ? 'Upscaling image' : 'Preparing image';
+  return { message, step, totalSteps: upscale ? 3 : 2, tiles: update?.tiles, download: update?.download };
+}
+
+function exportJobProgress(zip: boolean, update?: ImageProgress): ToolProgress {
+  const stage = update?.stage;
+  const step = stage === 'Packaging' ? 4 : stage === 'Encoding' ? 3 : stage === 'Applying edits' || stage === 'Upscaling' ? 2 : 1;
+  const message = step === 4 ? 'Packaging ZIP' : step === 3 ? 'Encoding image' : step === 2 ? 'Applying edits' : 'Preparing image';
+  return { message, step, totalSteps: zip ? 4 : 3, tiles: update?.tiles, download: update?.download };
 }
 
 export function ImageWorkspace() {
@@ -93,7 +102,6 @@ export function ImageWorkspace() {
   const [exportError, setExportError] = useState('');
   const [exportWarnings, setExportWarnings] = useState<readonly string[]>([]);
   const [dismissedWarnings, setDismissedWarnings] = useState<ReadonlySet<string>>(() => new Set());
-  const [exportDownload, setExportDownload] = useState<ImageProgress['download']>();
   const [fileAnnouncement, setFileAnnouncement] = useState('');
   const [fileDrag, setFileDrag] = useState<{ id: string; target?: string }>();
   const dragPosition = useRef<{ id: string; x: number; y: number }>(null);
@@ -125,6 +133,8 @@ export function ImageWorkspace() {
   const viewport = usePreviewView(stage, canvasSize, selected?.id, entries.length > 1 ? selectAdjacent : undefined);
   const comparisonOriginal = selected?.stack.original;
   const beforeKey = before?.key;
+  const comparisonPending = Boolean(comparing && previewIsCurrent && !jobsLocked && !work &&
+    comparisonKey && beforeKey !== comparisonKey);
   const selectedInfo = selected?.info;
   const selectionWarning = selectedInfo?.hasAlpha && !outputFormats[selectedInfo.output.format].alpha
     ? transparencyWarning(selectedInfo.output) : '';
@@ -146,11 +156,7 @@ export function ImageWorkspace() {
     try {
       await client.run((worker, progress) => worker.renderPreview({
         id: activeId, original: activeStack.original, commands: [...activeCommands(activeStack), command],
-      }, progress), update => report({
-        message: jobMessage(update),
-        download: update.download,
-        progress: update.tiles ? 0.05 + 0.9 * update.tiles.done / update.tiles.total : update.stage === 'Rendering preview' ? 0.98 : 0.02,
-      }));
+      }, progress), update => report(previewJob(command.toolId === 'upscale', update)));
       signal.throwIfAborted();
     } finally {
       signal.removeEventListener('abort', abort);
@@ -236,8 +242,6 @@ export function ImageWorkspace() {
     const progress = (update: ImageProgress) => {
       if (!pending) return;
       setExportProgress(update);
-      if (update.download) setExportDownload(update.download);
-      else if (update.stage !== 'Upscaling') setExportDownload(undefined);
     };
     const finish = (result: ImageExport | undefined, status: string, error = '') => {
       if (!pending) return;
@@ -246,7 +250,6 @@ export function ImageWorkspace() {
       setDirectDownload(exportJob.direct ? result : undefined);
       setNotice(status);
       setExportError(error);
-      setExportDownload(undefined);
       setExportJob(undefined);
       setExportProgress(undefined);
     };
@@ -439,7 +442,6 @@ export function ImageWorkspace() {
     setExportWarnings(files.flatMap(({ info }) => info?.hasAlpha && !outputFormats[info.output.format].alpha
       ? [transparencyWarning(info.output)] : []));
     setExportProgress(undefined);
-    setExportDownload(undefined);
     setEntries((current) => current.map((entry) => (
       entry.exportError && files.some(({ id }) => id === entry.id) ? { ...entry, exportError: undefined } : entry
     )));
@@ -502,11 +504,11 @@ export function ImageWorkspace() {
           <div className="panel-heading">
             <h2 id="preview-title">Preview</h2>
             <div className="preview-controls">
-              <Toggle size="sm" variant="outline" pressed={Boolean(comparing && selected?.stack.cursor)}
+              {previewUrl && <Toggle size="sm" variant="outline" pressed={Boolean(comparing && selected?.stack.cursor)}
                 disabled={!previewIsCurrent || !selected?.stack.cursor || jobsLocked}
                 onPressedChange={setComparing} aria-label="Compare">
                 <Columns2 aria-hidden /> Compare
-              </Toggle>
+              </Toggle>}
             {entries.length > 1 && (
               <div className="preview-navigation">
                 <Button variant="ghost" size="icon-sm" aria-label="Previous image" title="Previous image" disabled={selectionIndex <= 0 || jobsLocked} onClick={() => selectAdjacent(-1)}>
@@ -558,7 +560,9 @@ export function ImageWorkspace() {
               <Button variant="outline" className="retry-overlay" onClick={() => updateEntry(selected.id, { status: 'pending' })}>Retry preview</Button>
             )}
           </div>
-          <div className="preview-footer">
+          {comparisonPending && <JobProgress label="Comparison progress"
+            update={{ message: 'Preparing the original preview', step: 1, totalSteps: 1 }} />}
+          {previewUrl && <div className="preview-footer">
             {selected && selectedInfo && <div className="preview-facts">
               <p><span className="preview-dimensions">{formatDimensions(selectedInfo)}</span> · {formatBytes(selected.stack.original.size)}</p>
               <ImageDetails info={selectedInfo} />
@@ -586,7 +590,7 @@ export function ImageWorkspace() {
                 <TooltipContent>Redo (Ctrl/⌘ Shift Z)</TooltipContent>
               </Tooltip>
             </div>
-          </div>
+          </div>}
         </Card>
 
         <Card className="workspace-card file-panel" role="region" aria-labelledby="files-title">
@@ -676,6 +680,7 @@ export function ImageWorkspace() {
                   {warnings.map(warning => <p key={warning}>{warning}</p>)}
                 </Notice>
               )}
+              {completed.length > 0 ? <>
               <p className="section-note">Uses original pixels. Removes EXIF metadata.</p>
               <div className="export-buttons">
                 <Button disabled={selected?.status !== 'ready' || !previewIsCurrent || jobsLocked}
@@ -687,20 +692,18 @@ export function ImageWorkspace() {
                   <Archive size={17} aria-hidden /> Export ZIP
                 </Button>
               </div>
-              {exportDownload && exportDownload.loaded < exportDownload.total && <ModelDownloadNotice download={exportDownload} />}
-              <p className="job-status" role="status" aria-live="polite">
-                {exportJob
-                  ? exportProgress ? `${jobMessage(exportProgress)}${exportProgress.detail ? ' · File' : ''} ${exportProgress.index} of ${exportProgress.total}…` : 'Starting export…'
-                  : work ? `${previewProgress?.id === work.id ? jobMessage(previewProgress) : 'Checking'} ${fileName(work)}…` : notice}
-              </p>
+              </> : !work && <p className="section-note">Add an image to export it.</p>}
+              {exportJob ? <JobProgress update={exportJobProgress(exportJob.kind === 'zip', exportProgress)}
+                label="Export progress" statusClass="job-status"
+                file={exportProgress ?? { index: 1, total: exportJob.entries.length }} />
+                : work ? <JobProgress key={work.id} update={previewJob(activeCommands(work.stack).some(command => command.toolId === 'upscale'),
+                    previewProgress?.id === work.id ? previewProgress : undefined)}
+                  label="Preview progress" statusClass="job-status" />
+                : <p className="job-status" role="status">{notice}</p>}
               {exportError && <Notice variant="error" onDismiss={() => setExportError('')}>{exportError}</Notice>}
-              {exportJob && <Progress aria-label="Export progress" value={
-                exportProgress?.total && exportProgress.total > 1 ? 100 * (exportProgress.index - 1) / exportProgress.total : null
-              } />}
               {exportJob && <Button variant="outline" onClick={() => {
                 setExportJob(undefined);
                 setExportProgress(undefined);
-                setExportDownload(undefined);
                 setNotice('Export canceled.');
               }}>Cancel export</Button>}
               {!exportJob && work && <Button variant="outline" onClick={() => cancelPreview(work)}>Cancel preview</Button>}

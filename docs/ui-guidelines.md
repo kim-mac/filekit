@@ -12,4 +12,5 @@
 - Use the shared buttons, tabs, choice controls, progress bars, and notices. Use one filled primary action per panel and outline or ghost buttons for other actions. Give remove actions an explicit name and a distinct icon.
 - Give icon-only controls an accessible name and tooltip. Keep keyboard focus visible and restore it after inline editing or closing menus. Provide a keyboard equivalent for pointer actions. Use a minimum 44 px touch target and honor reduced motion.
 - Use an info notice for temporary context, a warning for output changes or device limits, and an error for a failed action. State what happened, what to expect, or what to try in plain language. Show progress for running work. Keep one notice per issue and offer dismissal when the information remains available elsewhere.
+- Report model downloads with bytes, percentage, and an estimated time remaining. Show tile counts or named steps for processing and keep elapsed time out of the live announcement.
 - Check 360, 768, 1024, 1280, and 1440 px in both themes. Include empty, loaded, busy, and error states when a layout or control changes.

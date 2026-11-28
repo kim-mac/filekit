@@ -10,6 +10,10 @@ test.use({ colorScheme: 'light' });
 
 test('opens the picker from Preview and the add tile, and downloads a nonselected file with its saved edits', async ({ page, isMobile }) => {
   await openImageWorkspace(page);
+  for (const name of ['Compare', 'Undo', 'Redo', 'Export image', 'Export ZIP']) {
+    await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
+  }
+  await expect(page.getByRole('region', { name: 'Export' })).toContainText('Add an image to export it.');
   for (const name of ['Convert', 'Crop', 'Blur', 'Remove background', 'Upscale']) {
     await expect(toolTab(page, name)).toBeDisabled();
   }

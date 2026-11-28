@@ -331,6 +331,7 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
   if (upscale) {
     const cached = activeFile === request.id && activeUpscaled?.key === upscale.key ? activeUpscaled.full : undefined;
     const raster = cached ?? await upscalePrefix(request, upscale, report);
+    report('Applying edits');
     return finishUpscale(raster, upscale, false, Boolean(cached));
   }
   releaseFullPreview();
@@ -345,11 +346,11 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
   const output = resolveOutput(format, conversion);
   // The AVIF wrapper reads the entire backing buffer, so crops need a dense raster.
   const mode = output.format === 'avif' ? 'orient' : 'compact';
+  report('Applying edits');
   if (!backgroundEdit && !blurEdits) return { frame: renderGeometry(original, geometry, mode), output };
   const maxEdge = backgroundEdit?.mask?.outputMaxEdge;
   const bounded = maxEdge ? resizePreview(original, maxEdge) : original;
   const mapped = maxEdge ? scaleGeometry(geometry, original, bounded) : geometry;
-  report('Applying edits');
   await applyRasterEdits(bounded, original, state);
   return { frame: renderGeometry(bounded, mapped, mode), output };
 }

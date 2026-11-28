@@ -170,7 +170,7 @@ describe('WASM export goldens', () => {
     await renderPreview({ ...second, cache: false }, progress);
     await exportImage(first, progress);
     await renderPreview({ ...first, maxEdge: 70, commands: [convert('avif')] }, progress);
-    expect(stages.splice(0)).toEqual(['Decoding', 'Rendering preview', 'Decoding', 'Encoding', 'Rendering preview']);
+    expect(stages.splice(0)).toEqual(['Decoding', 'Rendering preview', 'Decoding', 'Applying edits', 'Encoding', 'Rendering preview']);
 
     await renderPreview(second, progress);
     await renderPreview(first, progress);
@@ -193,7 +193,7 @@ describe('WASM export goldens', () => {
     expect(Object.keys(entries)).toEqual(['transparent.png', 'transparent (2).png']);
     expect(detectFormat(new Uint8Array(entries['transparent.png']).buffer)).toBe('png');
     expect(entries['transparent.png']).toEqual(entries['transparent (2).png']);
-    expect(stages).toEqual(['first Decoding', 'first Encoding', 'first Packaging', 'bad Decoding', 'second Decoding', 'second Encoding', 'second Packaging']);
+    expect(stages).toEqual(['first Decoding', 'first Applying edits', 'first Encoding', 'first Packaging', 'bad Decoding', 'second Decoding', 'second Applying edits', 'second Encoding', 'second Packaging']);
   });
 });
 

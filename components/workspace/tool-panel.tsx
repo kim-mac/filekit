@@ -1,12 +1,23 @@
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { isMobileDevice } from '../../lib/core/device';
 import { processingMessage } from '../../lib/core/processing-error';
-import type { EditCommand, ModelDownload, ToolProgress } from '../../lib/core/contracts';
+import type { EditCommand, ToolProgress } from '../../lib/core/contracts';
 import type { CategoryRegistry } from '../../lib/core/registry';
 import { Button } from '../ui/button';
-import { ModelDownloadNotice } from '../ui/model-download-notice';
+import { JobProgress } from '../ui/job-progress';
 import { Notice } from '../ui/notice';
-import { Progress } from '../ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+
+const desktopTools = '(min-width: 840px) and (not (any-pointer: coarse))';
+
+function subscribeToToolLayout(update: () => void) {
+  const media = window.matchMedia(desktopTools);
+  media.addEventListener('change', update);
+  return () => media.removeEventListener('change', update);
+}
+
+const useVerticalTools = () => useSyncExternalStore(subscribeToToolLayout,
+  () => !isMobileDevice() && window.matchMedia(desktopTools).matches, () => false);
 
 export function ToolPanel<State, Context>({
   registry, session, onBusyChange, disabled,
@@ -22,16 +33,15 @@ export function ToolPanel<State, Context>({
   disabled: boolean;
 }) {
   const revision = session?.revision;
+  const vertical = useVerticalTools();
   const tools = registry.list();
   const [activeId, setActiveId] = useState(tools[0]?.id);
   const [draft, setDraft] = useState<{ revision: object; options: Readonly<Record<string, unknown>> }>();
   const activeJob = useRef<AbortController>(null);
   const [progress, setProgress] = useState<ToolProgress>();
   const [status, setStatus] = useState<{ message: string; error?: boolean }>();
-  const [download, setDownload] = useState<ModelDownload>();
   useEffect(() => {
     setProgress(undefined);
-    setDownload(undefined);
     setStatus(undefined);
     return () => {
       if (activeJob.current) {
@@ -58,10 +68,9 @@ export function ToolPanel<State, Context>({
       if (tool.prepareOptions) {
         activeJob.current = controller;
         onBusyChange(true);
-        setProgress({ message: 'Preparing edit…', progress: 0 });
+        setProgress({ message: 'Preparing image', step: 1, totalSteps: 3 });
         value = await tool.prepareOptions(value, session.context, controller.signal, update => {
           if (controller.signal.aborted) return;
-          if (update.download) setDownload(update.download);
           setProgress(update);
         });
       }
@@ -73,15 +82,15 @@ export function ToolPanel<State, Context>({
         activeJob.current = null;
         onBusyChange(false);
         setProgress(undefined);
-        setDownload(undefined);
       }
     }
   }
 
   return (
-    <Tabs className="tool-panel" value={activeId} activationMode="manual"
+    <Tabs className="tool-panel" value={activeId} activationMode="manual" orientation={vertical ? 'vertical' : 'horizontal'}
       onValueChange={id => { setActiveId(id); setStatus(undefined); }}>
-      <TabsList className="tool-bar" aria-label="Available tools">
+      <TabsList className="tool-bar" aria-label="Available tools"
+        {...(!vertical && (!session || disabled || busy) ? { tabIndex: 0 } : {})}>
         {tools.map(({ id, name, icon: Icon }) => (
           <TabsTrigger key={id} value={id} disabled={!session || disabled || busy}>
             <Icon aria-hidden /> {name}
@@ -108,18 +117,12 @@ export function ToolPanel<State, Context>({
           <Button className="apply" type="submit" aria-disabled={applyDisabled}>Apply {tool.name.toLowerCase()}</Button>
           {progress && (
             <div className="tool-feedback option-fields">
-              {download && download.loaded < download.total ? <ModelDownloadNotice download={download} /> : (
-                <>
-                  <p className="section-note" role="status">{progress.message}</p>
-                  <Progress aria-label="Tool progress" value={progress.progress === undefined ? null : progress.progress * 100} />
-                </>
-              )}
+              <JobProgress update={progress} label="Tool progress" />
               <Button variant="outline" type="button" onClick={() => {
                 activeJob.current?.abort();
                 activeJob.current = null;
                 onBusyChange(false);
                 setProgress(undefined);
-                setDownload(undefined);
                 setStatus({ message: 'Edit canceled.' });
               }}>Cancel edit</Button>
             </div>

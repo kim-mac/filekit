@@ -28,7 +28,7 @@ async function loadWeights(model: Model, report: Report) {
   try {
     const expected = models[model];
     const response = await assetResponse(`${modelRoot}/${model}.json`, undefined, { root: modelRoot, ...expected },
-      (loaded, total, id) => report('Downloading upscale model', undefined, { id, loaded, total }));
+      (loaded, total, id, received) => report('Downloading upscale model', undefined, { id, loaded, total, received }));
     const bytes = await response.arrayBuffer();
     const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
     const digest = Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('');

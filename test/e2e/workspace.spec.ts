@@ -143,7 +143,9 @@ test('reports progress and cancels a worker export before a successful retry', a
   });
   await page.getByRole('button', { name: 'Export image' }).click();
   try {
-    await expect(status(page)).toHaveText('Encoding 1 of 1…');
+    await expect(status(page)).toHaveText('Step 3 of 3: Encoding image');
+    await expect(page.getByRole('progressbar', { name: 'Export progress' })).toHaveAttribute('aria-valuenow', '66');
+    await expect(page.getByText(/\ds elapsed/)).toBeVisible();
     await page.getByRole('button', { name: 'Cancel export' }).click();
     await expect(status(page)).toHaveText('Export canceled.');
     await expect(page.getByRole('link', { name: 'Save to device' })).toHaveCount(0);
@@ -166,10 +168,10 @@ test('cancels preview intake and retries the same file', async ({ page, context 
 
   await pick(page, 'transparent.png');
   try {
-    await expect(status(page)).toHaveText('Checking transparent.png…');
+    await expect(status(page)).toHaveText('Step 1 of 2: Preparing image');
     await page.getByRole('button', { name: 'Cancel preview' }).click();
     await expect(page.getByText('Preview canceled.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export image' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Export image' })).toHaveCount(0);
   } finally {
     release();
     await context.unroute(workerUrl);

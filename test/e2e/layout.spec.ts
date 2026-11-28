@@ -20,6 +20,19 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
   await openImageWorkspace(page);
   await pick(page, 'transparent.png');
   await waitForImage(page, 'transparent.png');
+  const tabs = page.getByRole('tablist', { name: 'Available tools' });
+  await expect(tabs).toHaveAttribute('aria-orientation', isMobile ? 'horizontal' : 'vertical');
+  const positions = await tabs.getByRole('tab').evaluateAll(items => items.map(item => Math.round(item.getBoundingClientRect().top)));
+  if (isMobile) {
+    expect(new Set(positions).size).toBe(1);
+    expect(await tabs.evaluate(list => list.scrollWidth > list.clientWidth)).toBe(true);
+  } else {
+    expect(new Set(positions).size).toBe(positions.length);
+    await toolTab(page, 'Convert').press('ArrowDown');
+    await expect(toolTab(page, 'Crop')).toBeFocused();
+    await toolTab(page, 'Convert').focus();
+    await page.locator('h1').click();
+  }
   await page.getByRole('img', { name: 'Preview of transparent.png' }).evaluate((image: HTMLImageElement) => image.decode());
   const add = await page.getByRole('button', { name: 'Add more images' }).boundingBox();
   const preview = (await page.getByRole('region', { name: 'Preview' }).boundingBox())!;

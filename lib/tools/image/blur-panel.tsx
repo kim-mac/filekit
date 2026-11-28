@@ -2,15 +2,15 @@ import { Button } from '../../../components/ui/button';
 import { ChoiceGroup } from '../../../components/ui/choice-group';
 import { Slider } from '../../../components/ui/slider';
 import { Toggle } from '../../../components/ui/toggle';
-import { ModelDownloadNotice } from '../../../components/ui/model-download-notice';
+import { JobProgress } from '../../../components/ui/job-progress';
 import { Notice } from '../../../components/ui/notice';
-import type { ModelDownload } from '../../core/contracts';
+import type { ToolProgress } from '../../core/contracts';
 import { isMemoryError, memoryRecovery } from '../../core/processing-error';
 import { proxy, wrap, type Remote } from 'comlink';
 import { Eraser, Focus, Pencil, RectangleHorizontal, ScanFace, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { yuNetSha256 } from '../../workers/image/face-model';
+import { preparingFaces, yuNetSha256 } from '../../workers/image/face-model';
 import type { FaceWorkerApi } from '../../workers/image/faces.worker';
 import { BlurEditor, type BlurMode } from './blur-editor';
 import { isBlurStroke, type BlurOptions, type BlurShape } from './blur-options';
@@ -38,8 +38,8 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
   const [draft, setDraft] = useState<{ source: Blob; frame: ImageData }>();
   const [faceStatus, setFaceStatus] = useState('');
   const [faceError, setFaceError] = useState('');
-  const [download, setDownload] = useState<ModelDownload>();
-  const [finding, setFinding] = useState(false);
+  const [faceProgress, setFaceProgress] = useState<ToolProgress>();
+  const finding = Boolean(faceProgress);
   const [draftError, setDraftError] = useState(false);
   const worker = useRef<{ instance: Worker; api: Remote<FaceWorkerApi> } | null>(null);
   const rejectFace = useRef<(error: Error) => void>(null);
@@ -62,10 +62,9 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
 
   useEffect(() => {
     faceRequest.current++;
-    setFinding(false);
     setFaceStatus('');
     setFaceError('');
-    setDownload(undefined);
+    setFaceProgress(undefined);
     setSelected(undefined);
     setDraft(undefined);
     setDraftError(false);
@@ -114,8 +113,8 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
   async function findFaces() {
     if (disabled || finding || rejectFace.current || !previewBlob) return;
     const request = ++faceRequest.current;
-    setFinding(true);
-    setFaceStatus('Detecting faces…');
+    setFaceProgress(preparingFaces);
+    setFaceStatus('');
     setFaceError('');
     try {
       const interrupted = new Promise<never>((_, reject) => { rejectFace.current = reject; });
@@ -123,7 +122,7 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
       const key = JSON.stringify([editKey, yuNetSha256]);
       const faces = aiResults.faces?.key === key ? aiResults.faces.boxes
         : await Promise.race([faceApi().findFaces(previewBlob, isMobileDevice(), proxy(update => {
-          if (faceRequest.current === request) setDownload(update);
+          if (faceRequest.current === request) setFaceProgress(update);
         })), interrupted]);
       if (faceRequest.current !== request || latest.current.previewBlob !== previewBlob || latest.current.disabled) return;
       aiResults.faces = { key, boxes: faces };
@@ -155,10 +154,7 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
       }
     } finally {
       rejectFace.current = null;
-      if (faceRequest.current === request) {
-        setFinding(false);
-        setDownload(undefined);
-      }
+      if (faceRequest.current === request) setFaceProgress(undefined);
     }
   }
 
@@ -246,7 +242,7 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
           </Button>
         )}
       </div>
-      {download && download.loaded < download.total ? <ModelDownloadNotice download={download} />
+      {faceProgress ? <JobProgress update={faceProgress} label="Face detection progress" />
         : faceStatus && <p className="section-note" role="status">{faceStatus}</p>}
       {faceError && <Notice variant="error" onDismiss={() => setFaceError('')}>{faceError}</Notice>}
       {hasDraft && draftError && <Notice variant="error">Could not show the draft. Apply blur to try again.</Notice>}

@@ -44,7 +44,7 @@ test('upscales after a crop, replays history, and exports exact dimensions', asy
   const result = `${80 * scale} × ${64 * scale} px`;
   await expect(page.getByText(`Result ${result}`, { exact: true })).toBeVisible();
   expect(weightsRequests).toEqual([]);
-  const downloadNotice = page.getByText(desktop ? /One-time model download \(~4\.86 MB\)/ : /One-time model download \(~2\.49 MB\)/);
+  const downloadNotice = page.getByText(desktop ? /One-time model download \(~4\.64 MB\)/ : /One-time model download \(~2\.37 MB\)/);
   const gate = desktop ? await holdRequest(context, weights) : undefined;
   try {
     await button(page, 'Apply upscale').click();

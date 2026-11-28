@@ -1,10 +1,10 @@
-import type { ModelDownload } from '../../core/contracts';
+import type { ModelDownload, ToolProgress } from '../../core/contracts';
 import { verifiedAsset } from '../bg0/asset-stream.mjs';
 import { wasmThreads } from '../wasm-threads.mjs';
 import { InferenceSession, Tensor, env } from 'onnxruntime-web/wasm';
 import type { Bounds } from '../../tools/image/geometry';
 import { resizePreview } from './pixels';
-import { yuNetBytes, yuNetSha256 } from './face-model';
+import { preparingFaces, yuNetBytes, yuNetSha256 } from './face-model';
 
 const modelUrl = '/face-models/yunet.onnx';
 const runtimeName = 'ort-wasm-simd-threaded';
@@ -36,7 +36,7 @@ function overlap(a: Bounds, b: Bounds) {
   return intersection / (area(a) + area(b) - intersection);
 }
 
-export async function findYuNetFaces(frame: ImageData, session: InferenceSession): Promise<Bounds[]> {
+export async function findYuNetFaces(frame: ImageData, session: InferenceSession, onInferenceComplete?: () => void): Promise<Bounds[]> {
   const { width, height, data } = resizePreview(frame, 320);
   const paddedWidth = Math.ceil(width / 64) * 64;
   const paddedHeight = Math.ceil(height / 64) * 64;
@@ -61,6 +61,7 @@ export async function findYuNetFaces(frame: ImageData, session: InferenceSession
   } finally {
     tensor.dispose();
   }
+  onInferenceComplete?.();
   const loc = result.loc.data as Float32Array;
   const conf = result.conf.data as Float32Array;
   const iou = result.iou.data as Float32Array;
@@ -100,6 +101,8 @@ export async function findYuNetFaces(frame: ImageData, session: InferenceSession
   return kept;
 }
 
-export async function detectFaces(frame: ImageData, mobile: boolean, report?: (download: ModelDownload) => void) {
-  return findYuNetFaces(frame, await loadDetector(mobile, report));
+export async function detectFaces(frame: ImageData, mobile: boolean, report: (update: ToolProgress) => void) {
+  const session = await loadDetector(mobile, download => report({ ...preparingFaces, download }));
+  report({ message: 'Finding faces', step: 2, totalSteps: 3 });
+  return findYuNetFaces(frame, session, () => report({ message: 'Preparing face regions', step: 3, totalSteps: 3 }));
 }
