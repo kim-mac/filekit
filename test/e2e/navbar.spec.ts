@@ -61,7 +61,8 @@ test('the desktop switcher marks Images and keeps upcoming categories disabled',
   const nav = page.getByRole('navigation', { name: 'Tool categories' });
   const images = nav.getByRole('link', { name: 'Images' });
   await expect(images).toHaveAttribute('aria-current', 'page');
-  for (const category of ['PDF', 'Audio', 'Video']) {
+  await expect(nav.getByRole('link', { name: 'PDF' })).toHaveAttribute('href', '/pdf/');
+  for (const category of ['Audio', 'Video']) {
     await expect(nav.getByRole('button', { name: `${category} Soon` })).toBeDisabled();
   }
   await images.focus();
@@ -96,7 +97,8 @@ test('the mobile dropdown fits the logo and privacy badge and supports keyboard 
   await expect(menu).toBeVisible();
   const images = menu.getByRole('menuitem', { name: 'Images' });
   await expect(images).toHaveAttribute('aria-current', 'page');
-  for (const category of ['PDF', 'Audio', 'Video']) {
+  await expect(menu.getByRole('menuitem', { name: 'PDF' })).toHaveAttribute('href', '/pdf/');
+  for (const category of ['Audio', 'Video']) {
     await expect(menu.getByRole('menuitem', { name: `${category} Soon` })).toBeDisabled();
   }
   await page.keyboard.press('Escape');

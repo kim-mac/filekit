@@ -1,5 +1,5 @@
 import { isMemoryError, memoryRecovery, processingMessage } from '../../core/processing-error';
-import { Zip, ZipPassThrough } from 'fflate';
+import { createBlobZip } from '../blob-zip';
 import type { EditCommand } from '../../core/contracts';
 import { sameBackground, type BackgroundOptions } from '../../tools/image/background-options';
 import { compositeBackground } from './background';
@@ -382,11 +382,7 @@ function uniqueName(name: string, names: Set<string>) {
 }
 
 export async function exportZip(requests: readonly ImageRequest[], progress: ProgressCallback): Promise<ZipResult> {
-  const chunks: BlobPart[] = [];
-  const zip = new Zip((error, data) => {
-    if (error) throw error;
-    chunks.push(new Blob([data as Uint8Array<ArrayBuffer>]));
-  });
+  const zip = createBlobZip();
   const names = new Set<string>();
   const failures: FileFailure[] = [];
   let count = 0;
@@ -402,17 +398,10 @@ export async function exportZip(requests: readonly ImageRequest[], progress: Pro
       continue;
     }
     report('Packaging');
-    const entry = new ZipPassThrough(uniqueName(result.name, names));
-    zip.add(entry);
-    // Stream the encoded blob in chunks, retaining only the archive and one active image.
-    const reader = result.blob.stream().getReader();
-    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
-      entry.push(chunk.value);
-    }
-    entry.push(new Uint8Array(0), true);
+    await zip.add(uniqueName(result.name, names), result.blob);
     count++;
   }
 
-  zip.end();
-  return { blob: count ? new Blob(chunks, { type: 'application/zip' }) : null, failures, count };
+  const blob = zip.finish();
+  return { blob: count ? blob : null, failures, count };
 }

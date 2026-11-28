@@ -18,8 +18,8 @@ export class CategoryRegistry<State, Context = undefined> {
 
     this.tools.set(tool.id, {
       ...tool,
-      OptionsPanel: ({ value, context, onChange }) =>
-        createElement(tool.OptionsPanel, { value: tool.parseOptions(value), context, onChange }),
+      OptionsPanel: ({ value, context, onChange, onApply }) =>
+        createElement(tool.OptionsPanel, { value: tool.parseOptions(value), context, onChange, onApply }),
       ...(tool.getApplyError ? {
         getApplyError: (options, context) => tool.getApplyError!(tool.parseOptions(options), context),
       } : {}),

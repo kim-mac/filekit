@@ -42,6 +42,20 @@ export default function LicensesPage() {
           <li><a href="/licenses/Magick-WASM-Apache-2.0.txt">ImageMagick WASM · Apache-2.0</a></li>
           <li><a href="/licenses/Magick-WASM-NOTICE.txt">ImageMagick bundled library notices</a></li>
         </ul>
+        <h2>PDF tools</h2>
+        <ul>
+          <li><a href="/licenses/pdf/PDF.js-Apache-2.0.txt">PDF.js · Apache-2.0</a></li>
+          <li><a href="/licenses/pdf/pdf-lib-MIT.txt">pdf-lib · MIT</a></li>
+          <li><a href="/licenses/pdf/pdf-lib-standard-fonts-MIT.txt">pdf-lib standard fonts module · MIT</a></li>
+          <li><a href="/licenses/pdf/pdf-lib-upng-MIT.txt">pdf-lib UPNG module · MIT</a></li>
+          <li><a href="/licenses/pdf/QPDF-Apache-2.0.txt">QPDF · Apache-2.0</a></li>
+          <li><a href="/licenses/pdf/QPDF-NOTICE.md">QPDF third-party notices</a></li>
+          <li><a href="/licenses/pdf/qpdf-wasm-ISC.txt">QPDF WASM wrapper · ISC</a></li>
+          <li><a href="/workers/pdf/cmaps/LICENSE">Adobe CMaps license</a></li>
+          <li><a href="/workers/pdf/standard_fonts/LICENSE_FOXIT">Foxit fonts license</a></li>
+          <li><a href="/workers/pdf/standard_fonts/LICENSE_LIBERATION">Liberation fonts license</a></li>
+          <li><a href="/workers/pdf/iccs/LICENSE">PDF.js ICC profiles license</a></li>
+        </ul>
         <p><a href="/licenses/THIRD_PARTY_NOTICES.md">Third-party notices and model attribution</a></p>
         <p><a href="/licenses/ONNX-Runtime-ThirdPartyNotices.txt">ONNX Runtime third-party notices</a></p>
         <p><a href="/licenses/FileKit-MIT.txt">FileKit license</a></p>

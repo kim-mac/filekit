@@ -1,17 +1,19 @@
 import { ArrowLeft, ArrowRight, Check, Copy, Download, Ellipsis, Image, LoaderCircle, Pencil, X } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
-import { useId, useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type ComponentType, type PointerEvent, type ReactNode } from 'react';
 import { sanitizeBaseName } from '../../lib/core/file-name';
 import { Button } from '../ui/button';
 import { Notice } from '../ui/notice';
 import { useObjectUrl } from './use-object-url';
 
-interface FileTileProps {
+export interface FileTileProps {
   id: string;
   name: string;
   baseName: string;
   extension: string;
   thumbnail?: Blob;
+  thumbnailContent?: ReactNode;
+  fallbackIcon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>;
   selected: boolean;
   status: string;
   processing: boolean;
@@ -25,6 +27,7 @@ interface FileTileProps {
   onSelect: () => void;
   onDownload: () => void;
   onCopy?: () => void;
+  copyLabel?: string;
   onRemove: () => void;
   onRename: (name: string) => void;
   onMove: (direction: -1 | 1) => void;
@@ -33,8 +36,8 @@ interface FileTileProps {
 }
 
 export function FileTile({
-  id, name, baseName, extension, thumbnail, selected, status, processing, error, disabled, ready,
-  canMoveLeft, canMoveRight, dragSource, dropTarget, onSelect, onDownload, onCopy, onRemove, onRename, onMove, onDrag, onDragEnd,
+  id, name, baseName, extension, thumbnail, thumbnailContent, fallbackIcon: Icon = Image, selected, status, processing, error, disabled, ready,
+  canMoveLeft, canMoveRight, dragSource, dropTarget, onSelect, onDownload, onCopy, copyLabel, onRemove, onRename, onMove, onDrag, onDragEnd,
 }: FileTileProps) {
   const url = useObjectUrl(thumbnail);
   const [draft, setDraft] = useState<string>();
@@ -107,10 +110,10 @@ export function FileTile({
                 onPointerUp={event => endDrag(event, true)}
                 onPointerCancel={event => endDrag(event, false)}
                 onLostPointerCapture={event => endDrag(event, false)}>
-                {url ? (
+                {thumbnailContent ?? (url ? (
                   /* eslint-disable-next-line @next/next/no-img-element -- Local worker thumbnail. */
                   <img src={url} alt="" draggable={false} />
-                ) : <Image size={21} aria-hidden />}
+                ) : <Icon size={21} aria-hidden />)}
               </span>
               <span className="file-name">{name}</span>
               <small className={error ? 'file-error' : ''}>
@@ -139,7 +142,7 @@ export function FileTile({
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content className="file-menu" sideOffset={4} align="start">
-                    <DropdownMenu.Item disabled={!onCopy} onSelect={onCopy}><Copy size={16} aria-hidden /> Copy image</DropdownMenu.Item>
+                    {copyLabel && <DropdownMenu.Item disabled={!onCopy} onSelect={onCopy}><Copy size={16} aria-hidden /> {copyLabel}</DropdownMenu.Item>}
                     <DropdownMenu.Item disabled={!canMoveLeft} onSelect={() => onMove(-1)}><ArrowLeft size={16} aria-hidden /> Move left</DropdownMenu.Item>
                     <DropdownMenu.Item disabled={!canMoveRight} onSelect={() => onMove(1)}><ArrowRight size={16} aria-hidden /> Move right</DropdownMenu.Item>
                   </DropdownMenu.Content>

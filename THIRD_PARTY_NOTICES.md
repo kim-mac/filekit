@@ -31,6 +31,17 @@ FileKit distributes the 344,799-byte checkpoint without changes. The worker veri
 
 [Evaluation inputs, model provenance, and comparison sheets](docs/upscale-eval.md)
 
+## PDF workspace
+
+| Component | License and attribution |
+| --- | --- |
+| [PDF.js 6.5.438](https://github.com/mozilla/pdf.js) | Apache-2.0, Mozilla and PDF.js contributors. The bundled CMaps, Foxit and Liberation fonts, color profiles, and WASM decoders ship with their upstream notices in the corresponding `/workers/pdf/` directories. |
+| [pdf-lib 1.17.1](https://github.com/Hopding/pdf-lib) | MIT, Copyright (c) 2019 Andrew Dillon. Its standard-fonts and UPNG modules also ship under the MIT license. |
+| [QPDF 12.2.0](https://github.com/qpdf/qpdf/tree/v12.2.0) | Apache-2.0, Jay Berkenbilt and contributors. [License](licenses/pdf/QPDF-Apache-2.0.txt) and [third-party notices](licenses/pdf/QPDF-NOTICE.md). |
+| [@neslinesli93/qpdf-wasm 0.3.1](https://github.com/neslinesli93/qpdf-wasm) | ISC, Copyright (c) 2026 Tommaso Pifferi. This wrapper loads QPDF on first encrypted input. |
+
+The deployed [licenses page](/about/licenses/) links to the complete license texts. See [PDF fixture provenance](test/fixtures/pdf/SOURCES.md).
+
 ## Interface font
 
 [Inter 4.1](https://github.com/rsms/inter/tree/e3a3d4c57d5ecc01453a575621882a384c1995a3) is copyright The Inter Project Authors and distributed under the SIL Open Font License 1.1. FileKit serves the authors’ variable WOFF2 from its own origin. [License](licenses/inter/Inter-OFL.txt)

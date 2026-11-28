@@ -20,7 +20,7 @@ const useVerticalTools = () => useSyncExternalStore(subscribeToToolLayout,
   () => !isMobileDevice() && window.matchMedia(desktopTools).matches, () => false);
 
 export function ToolPanel<State, Context>({
-  registry, session, onBusyChange, disabled,
+  registry, session, onBusyChange, disabled, emptyMessage = 'Add an image to start',
 }: {
   registry: CategoryRegistry<State, Context>;
   session?: {
@@ -29,8 +29,9 @@ export function ToolPanel<State, Context>({
     revision: object;
     onApply: (command: EditCommand) => void;
   };
-  onBusyChange: (busy: boolean) => void;
+  onBusyChange?: (busy: boolean) => void;
   disabled: boolean;
+  emptyMessage?: string;
 }) {
   const revision = session?.revision;
   const vertical = useVerticalTools();
@@ -47,7 +48,7 @@ export function ToolPanel<State, Context>({
       if (activeJob.current) {
         activeJob.current.abort();
         activeJob.current = null;
-        onBusyChange(false);
+        onBusyChange?.(false);
       }
     };
   }, [onBusyChange, revision]);
@@ -59,15 +60,15 @@ export function ToolPanel<State, Context>({
   const busy = Boolean(progress);
   const longOperation = session && tool.mayTakeAMinute?.(options, session.context);
   const applyDisabled = !session || disabled || busy || Boolean(tool.getApplyError?.(options, session.context));
-  async function submit() {
-    if (!session || applyDisabled || activeJob.current) return;
+  async function submit(input: unknown) {
+    if (!session || disabled || busy || activeJob.current || tool.getApplyError?.(input, session.context)) return;
     const controller = new AbortController();
     try {
-      let value = tool.parseOptions(options);
+      let value = tool.parseOptions(input);
       setStatus(undefined);
       if (tool.prepareOptions) {
         activeJob.current = controller;
-        onBusyChange(true);
+        onBusyChange?.(true);
         setProgress({ message: 'Preparing image', step: 1, totalSteps: 3 });
         value = await tool.prepareOptions(value, session.context, controller.signal, update => {
           if (activeJob.current !== controller || controller.signal.aborted) return;
@@ -80,7 +81,7 @@ export function ToolPanel<State, Context>({
     } finally {
       if (activeJob.current === controller) {
         activeJob.current = null;
-        onBusyChange(false);
+        onBusyChange?.(false);
         setProgress(undefined);
       }
     }
@@ -98,9 +99,9 @@ export function ToolPanel<State, Context>({
         ))}
       </TabsList>
       <TabsContent value={activeId}>
-        {!session ? <p className="section-note">Add an image to start</p> : <form onSubmit={(event) => {
+        {!session ? <p className="section-note">{emptyMessage}</p> : <form onSubmit={(event) => {
           event.preventDefault();
-          void submit();
+          if (tool.actionLabel !== false) void submit(options);
         }}>
           <fieldset className="tool-controls" disabled={disabled || busy}>
             <Suspense fallback={<p role="status">Opening tool…</p>}>
@@ -108,20 +109,23 @@ export function ToolPanel<State, Context>({
                 value={options}
                 context={session.context}
                 onChange={(value) => setDraft({ revision: session.revision, options: { ...drafts, [activeId]: value } })}
+                onApply={(value) => { void submit(value); }}
               />
             </Suspense>
           </fieldset>
           {longOperation && !busy && !applyDisabled && (
             <div className="tool-feedback"><Notice announce={false}>This may take a minute on this device.</Notice></div>
           )}
-          <Button className="apply" type="submit" aria-disabled={applyDisabled}>Apply {tool.name.toLowerCase()}</Button>
+          {tool.actionLabel !== false && (
+            <Button className="apply" type="submit" aria-disabled={applyDisabled}>{tool.actionLabel ?? `Apply ${tool.name.toLowerCase()}`}</Button>
+          )}
           {progress && (
             <div className="tool-feedback option-fields">
               <JobProgress update={progress} label="Tool progress" />
               <Button variant="outline" type="button" onClick={() => {
                 activeJob.current?.abort();
                 activeJob.current = null;
-                onBusyChange(false);
+                onBusyChange?.(false);
                 setProgress(undefined);
                 setStatus({ message: 'Edit canceled.' });
               }}>Cancel edit</Button>
