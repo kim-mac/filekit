@@ -94,7 +94,7 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
   await expect(page.getByRole('radio', { name: 'Transparent', exact: true })).toBeChecked();
   const removal = page.getByRole('region', { name: 'Tools' });
   if (!isMobile) {
-    // Fit the full card below the sticky header and keep hover out of the baseline.
+    // Fit the full card in the viewport and keep hover out of the baseline.
     await page.setViewportSize({ ...page.viewportSize()!, height: 900 });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.mouse.move(0, 0);

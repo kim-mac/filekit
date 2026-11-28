@@ -63,7 +63,6 @@
   --text-helper: .75rem;
   --text-body: .875rem;
   --text-title: 1rem;
-  --navbar-gap: var(--space-3);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -91,15 +90,12 @@ button:enabled { cursor: pointer; }
 button:disabled, button[aria-disabled="true"] { opacity: .52; cursor: default; }
 button, a, label { touch-action: manipulation; }
 
-html:has(.site-header) { scroll-padding-top: calc(var(--navbar-gap) + 72px); }
 .page-container { width: min(100% - 32px, 1280px); margin-inline: auto; }
 .site-header {
-  position: sticky; top: var(--navbar-gap); z-index: 20;
-  margin-block-start: var(--navbar-gap); padding: var(--space-1) var(--space-4);
+  margin-block-start: var(--space-3); padding: var(--space-1) var(--space-4);
   display: flex; min-height: 60px; align-items: center; justify-content: space-between; gap: var(--space-2);
   border: 1px solid var(--line); background: var(--surface); border-radius: 16px;
 }
-.site-header[data-scrolled] { box-shadow: 0 4px 12px rgb(0 0 0 / .15); }
 .site-brand { display: flex; align-items: center; gap: var(--space-4); }
 .wordmark { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; font-weight: 800; font-size: 19px; letter-spacing: -.055em; }
 .privacy { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-body); font-weight: 650; white-space: nowrap; }

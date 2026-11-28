@@ -32,8 +32,8 @@ for (const width of [1280, 1440]) {
   });
 }
 
-test('keeps the navbar in place as content scrolls underneath', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 540 });
+test('scrolls the floating navbar out of view with the workspace', async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: isMobile ? 360 : 1280, height: 540 });
   await openImageWorkspace(page);
   await pick(page, 'oriented.png', 'transparent.png');
   await waitForImage(page, 'oriented.png');
@@ -44,14 +44,14 @@ test('keeps the navbar in place as content scrolls underneath', async ({ page })
   const initialHeader = (await header.boundingBox())!;
   const initialPreview = (await preview.boundingBox())!;
   expect(initialHeader.y).toBeGreaterThan(0);
-  await expect(header).not.toHaveAttribute('data-scrolled');
+  await expect(header).toBeInViewport({ ratio: 1 });
   const scrollY = await page.evaluate(() => {
     window.scrollTo(0, 180);
     return window.scrollY;
   });
-  expect(scrollY).toBeGreaterThan(0);
-  await expect(header).toHaveAttribute('data-scrolled', 'true');
-  expect((await header.boundingBox())!.y).toBeCloseTo(initialHeader.y, 0);
+  expect(scrollY).toBeGreaterThan(initialHeader.y + initialHeader.height);
+  await expect(header).not.toBeInViewport();
+  expect((await header.boundingBox())!.y + scrollY).toBeCloseTo(initialHeader.y, 0);
   expect((await preview.boundingBox())!.y + scrollY).toBeCloseTo(initialPreview.y, 0);
 });
 
@@ -129,7 +129,7 @@ test('captures the dark navbar at desktop and mobile sizes', async ({ page, isMo
   } else {
     await page.setViewportSize({ width: 1280, height: 540 });
     await page.evaluate(() => window.scrollTo(0, 180));
-    await expect(page.getByRole('banner')).toHaveAttribute('data-scrolled', 'true');
-    await expect(page).toHaveScreenshot('navbar-sticky-dark.png', { maxDiffPixelRatio: 0.04 });
+    await expect(page.getByRole('banner')).not.toBeInViewport();
+    await expect(page).toHaveScreenshot('workspace-scrolled-dark.png', { maxDiffPixelRatio: 0.04 });
   }
 });

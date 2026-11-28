@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { ChevronDown, Layers, ShieldCheck } from 'lucide-react';
 import { DropdownMenu, Popover } from 'radix-ui';
-import { useEffect, useState } from 'react';
 import { categories } from '../lib/core/categories';
 import type { Category } from '../lib/core/contracts';
 import { Button } from './ui/button';
@@ -45,17 +44,8 @@ function CategorySwitcher({ current }: { current: Category }) {
 }
 
 export function SiteHeader({ current }: { current?: Category }) {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const update = () => setScrolled(window.scrollY > 0);
-    update();
-    window.addEventListener('scroll', update, { passive: true });
-    return () => window.removeEventListener('scroll', update);
-  }, []);
-
   return (
-    <header className="site-header page-container" data-scrolled={scrolled || undefined}>
+    <header className="site-header page-container">
       <div className="site-brand">
         <Link href="/" prefetch={false} className="wordmark" aria-label="FileKit home" aria-current={current ? undefined : 'page'}>
           <Layers size={20} aria-hidden /> FileKit
