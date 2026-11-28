@@ -7,8 +7,8 @@ import { isMobileDevice } from '../../../lib/core/device';
 import { activeCommands, redo, undo } from '../../../lib/core/edit-stack';
 import { isMemoryError } from '../../../lib/core/processing-error';
 import { formatBytes } from '../../../lib/tools/image/size-estimate';
-import { pdfTools, type PdfToolContext } from '../../../lib/tools/pdf';
-import { type PageOperation, type PageRef } from '../../../lib/tools/pdf/pages';
+import { pdfTools, type OrganizeAction, type PdfToolContext } from '../../../lib/tools/pdf';
+import { pageRenderKey, type PageOperation, type PageRef } from '../../../lib/tools/pdf/pages';
 import { PdfWorkerClient } from '../../../lib/workers/pdf/client';
 import type { ExportResult, RasterOptions } from '../../../lib/workers/pdf/types';
 import { Button } from '../../ui/button';
@@ -22,6 +22,7 @@ import { WorkspaceShell } from '../workspace-shell';
 import { PageGrid } from './page-grid';
 import { PasswordDialog } from './password-dialog';
 import { PdfDetails } from './pdf-details';
+import { PdfFileThumbnail } from './pdf-file-thumbnail';
 import { SinglePage } from './single-page';
 import { documentBaseName, documentName, documentPages, usePdfDocuments, type PdfEntry } from './use-pdf-documents';
 
@@ -52,6 +53,7 @@ export function PdfWorkspace() {
   const [selection, setSelection] = useState<Selection>();
   const [dragTarget, setDragTarget] = useState<string>();
   const picker = useRef<HTMLInputElement>(null);
+  const preview = useRef<HTMLDivElement>(null);
   const fileStrip = useRef<HTMLUListElement>(null);
   const emptyPicker = useRef<HTMLButtonElement>(null);
   const save = useRef<HTMLAnchorElement>(null);
@@ -65,8 +67,8 @@ export function PdfWorkspace() {
   const pages = openFiles.find(file => file.id === activeId)?.pages ?? emptyPages;
   const first = pages[0]?.id;
   const selectionHere = selection?.document === activeId ? selection : undefined;
-  const chosen = selectionHere?.ids ?? new Set(first ? [first] : []);
-  const chosenPages = pages.filter(page => chosen.has(page.id));
+  const chosenPages = pages.filter(page => selectionHere ? selectionHere.ids.has(page.id) : page.id === first);
+  const chosen = new Set(chosenPages.map(page => page.id));
   const pageIndex = Math.max(0, pages.findIndex(page => page.id === (selectionHere?.focus ?? first)));
   const currentView = selectionHere ? view : 'grid';
   const { canRender } = documents;
@@ -88,10 +90,23 @@ export function PdfWorkspace() {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (locked || !selected || !ready || documents.lockedFile || !(event.metaKey || event.ctrlKey) ||
-        event.key.toLowerCase() !== 'z' || (event.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable=true]')) return;
-      event.preventDefault();
-      changeHistory(event.shiftKey ? 'redo' : 'undo');
+      if (event.defaultPrevented || locked || !context || documents.lockedFile || event.altKey ||
+        (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=dialog], [role=menu]'))) return;
+      const key = event.key.toLowerCase();
+      if (event.metaKey || event.ctrlKey) {
+        const action = key === 'z' ? () => changeHistory(event.shiftKey ? 'redo' : 'undo')
+          : !event.shiftKey && key === 'a' ? selectAll
+            : !event.shiftKey && key === 'd' ? () => organizePages('duplicate') : undefined;
+        if (action) {
+          event.preventDefault();
+          if (!event.repeat) action();
+        }
+        return;
+      }
+      if (key === 'r' || key === 'delete' || key === 'backspace') {
+        event.preventDefault();
+        if (!event.repeat) organizePages(key === 'r' ? event.shiftKey ? 'rotateLeft' : 'rotateRight' : 'delete');
+      }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -150,6 +165,17 @@ export function PdfWorkspace() {
 
   function edit(operation: PageOperation, message: string, id = activeId, tool = 'organize') {
     if (!id || locked) return;
+    if (id === activeId && operation.kind === 'delete') {
+      const focused = document.activeElement?.closest<HTMLElement>('[data-pdf-page]')?.dataset.pdfPage;
+      const removed = new Set(operation.ids);
+      if (focused && removed.has(focused)) {
+        const index = pages.findIndex(page => page.id === focused);
+        const next = pages.find((page, position) => position > index && !removed.has(page.id))
+          ?? pages.findLast(page => !removed.has(page.id));
+        const button = next && preview.current?.querySelector<HTMLButtonElement>(`[data-pdf-page="${next.id}"] .pdf-select-page`);
+        (button || preview.current?.querySelector<HTMLButtonElement>('.preview-controls button'))?.focus();
+      }
+    }
     documents.edit(id, operation, tool);
     clearOutput();
     setAnnouncement(message);
@@ -177,10 +203,23 @@ export function PdfWorkspace() {
     edit({ kind: 'insert', pages: copies }, `Copied ${pageCount(copies.length)} to ${openFiles.find(file => file.id === target)?.name}.`, target, 'merge');
   }
 
-  async function useTool(command: EditCommand) {
+  function organizePages(action: OrganizeAction, id?: string) {
+    const target = id ? pages.filter(page => page.id === id) : chosenPages;
+    if (!target.length) return;
+    void useTool({ toolId: 'organize', options: { action } }, target);
+  }
+
+  async function useTool(command: EditCommand, target?: readonly PageRef[]) {
     if (!context || !selected || locked) return;
     try {
-      const state = await pdfTools.get(command.toolId).apply(context, command.options);
+      const tool = pdfTools.get(command.toolId);
+      const input = target ? { ...context, selected: target } : context;
+      const message = tool.getApplyError?.(command.options, input);
+      if (message) {
+        setNotice({ type: 'info', text: message });
+        return;
+      }
+      const state = await tool.apply(input, command.options);
       const result = state.result;
       if (!result) return;
       if (result.kind === 'edit') edit(result.operation, result.message, result.target ?? activeId, command.toolId);
@@ -257,7 +296,7 @@ export function PdfWorkspace() {
           documents.addFiles(Array.from(event.currentTarget.files ?? []));
           event.currentTarget.value = '';
         }} />}>
-      <Card className="workspace-card preview-panel pdf-preview" role="region" aria-labelledby="preview-title">
+      <Card ref={preview} className="workspace-card preview-panel pdf-preview" role="region" aria-labelledby="preview-title">
         <div className="panel-heading">
           <h2 id="preview-title">Preview</h2>
           {ready && <div className="preview-controls">
@@ -284,7 +323,8 @@ export function PdfWorkspace() {
         {context && currentView === 'grid' && <>
           <div className="pdf-actions pdf-selection" role="group" aria-label="Page selection">
             <span role="status">{chosenPages.length} selected</span>
-            <Button type="button" size="sm" variant="ghost" disabled={locked || chosenPages.length === pages.length} onClick={selectAll}>Select all pages</Button>
+            <Button type="button" size="sm" variant="ghost" aria-keyshortcuts="Control+A Meta+A"
+              disabled={locked || chosenPages.length === pages.length} onClick={selectAll}>Select all pages</Button>
             {mobile && <Button type="button" size="sm" variant="outline" aria-pressed={multi} onClick={() => setMulti(!multi)}>Multi-select</Button>}
             <div className="pdf-move">
               <Button aria-label="Move selected pages earlier" title="Move selected pages earlier" variant="ghost" size="icon"
@@ -294,7 +334,7 @@ export function PdfWorkspace() {
             </div>
           </div>
           <PageGrid key={activeId} pages={pages} selected={chosen} locked={locked} render={canRender ? documents.render : undefined}
-            onSelect={selectPage} onSelectAll={selectAll} onOpen={id => {
+            onSelect={selectPage} onRotate={id => organizePages('rotateRight', id)} onDelete={id => organizePages('delete', id)} onOpen={id => {
               if (!canRender) return;
               focusPage(pages.findIndex(page => page.id === id));
               setView('single');
@@ -334,7 +374,9 @@ export function PdfWorkspace() {
           if (index >= 0 && index < entries.length) setAnnouncement(`Moved file to position ${index + 1}.`);
         }}
         announcement={announcement} tiles={entries.map(entry => {
-          const count = openFiles.find(file => file.id === entry.id)?.pages.length ?? 0;
+          const file = openFiles.find(file => file.id === entry.id);
+          const count = file?.pages.length ?? 0;
+          const cover = file?.pages[0];
           const index = entries.indexOf(entry);
           const processing = exporting?.id === entry.id || work?.id === entry.id;
           const status = exporting?.id === entry.id ? 'Exporting…' : processing ? 'Opening…'
@@ -343,6 +385,8 @@ export function PdfWorkspace() {
           return {
             id: entry.id, name: documentName(entry), baseName: documentBaseName(entry), extension: '.pdf', thumbnail: entry.thumbnail,
             fallbackIcon: entry.kind === 'image' ? undefined : FileText,
+            thumbnailContent: entry.kind !== 'image' && cover && canRender
+              ? <PdfFileThumbnail key={pageRenderKey(cover)} page={cover} render={documents.render} /> : undefined,
             selected: entry.id === activeId, status, processing, error: entry.error, disabled: locked, ready: entry.status === 'ready',
             onSelect: () => selectFile(entry), onRemove: () => {
               const next = entries[index + 1] ?? entries[index - 1];

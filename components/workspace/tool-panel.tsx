@@ -60,11 +60,11 @@ export function ToolPanel<State, Context>({
   const busy = Boolean(progress);
   const longOperation = session && tool.mayTakeAMinute?.(options, session.context);
   const applyDisabled = !session || disabled || busy || Boolean(tool.getApplyError?.(options, session.context));
-  async function submit() {
-    if (!session || applyDisabled || activeJob.current) return;
+  async function submit(input: unknown) {
+    if (!session || disabled || busy || activeJob.current || tool.getApplyError?.(input, session.context)) return;
     const controller = new AbortController();
     try {
-      let value = tool.parseOptions(options);
+      let value = tool.parseOptions(input);
       setStatus(undefined);
       if (tool.prepareOptions) {
         activeJob.current = controller;
@@ -101,7 +101,7 @@ export function ToolPanel<State, Context>({
       <TabsContent value={activeId}>
         {!session ? <p className="section-note">{emptyMessage}</p> : <form onSubmit={(event) => {
           event.preventDefault();
-          void submit();
+          if (tool.actionLabel !== false) void submit(options);
         }}>
           <fieldset className="tool-controls" disabled={disabled || busy}>
             <Suspense fallback={<p role="status">Opening tool…</p>}>
@@ -109,13 +109,16 @@ export function ToolPanel<State, Context>({
                 value={options}
                 context={session.context}
                 onChange={(value) => setDraft({ revision: session.revision, options: { ...drafts, [activeId]: value } })}
+                onApply={(value) => { void submit(value); }}
               />
             </Suspense>
           </fieldset>
           {longOperation && !busy && !applyDisabled && (
             <div className="tool-feedback"><Notice announce={false}>This may take a minute on this device.</Notice></div>
           )}
-          <Button className="apply" type="submit" aria-disabled={applyDisabled}>{tool.actionLabel ?? `Apply ${tool.name.toLowerCase()}`}</Button>
+          {tool.actionLabel !== false && (
+            <Button className="apply" type="submit" aria-disabled={applyDisabled}>{tool.actionLabel ?? `Apply ${tool.name.toLowerCase()}`}</Button>
+          )}
           {progress && (
             <div className="tool-feedback option-fields">
               <JobProgress update={progress} label="Tool progress" />

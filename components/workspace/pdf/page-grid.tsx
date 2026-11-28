@@ -1,18 +1,12 @@
-import { GripVertical } from 'lucide-react';
+import { GripVertical, RotateCw, Trash2 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import type { PageRef } from '../../../lib/tools/pdf/pages';
+import { pageRenderKey, type PageRef } from '../../../lib/tools/pdf/pages';
 import type { PreviewResult } from '../../../lib/workers/pdf/types';
 import { Button } from '../../ui/button';
 import { useObjectUrl } from '../use-object-url';
 
-const rowHeight = 156;
+const rowHeight = 184;
 const gap = 8;
-
-function keyFor(page: PageRef) {
-  if (page.kind === 'pdf') return `${page.source}:${page.index}:${page.rotation}`;
-  if (page.kind === 'image') return JSON.stringify([page.source, page.rotation, page.layout]);
-  return JSON.stringify([page.rotation, page.size]);
-}
 
 interface GridProps {
   pages: readonly PageRef[];
@@ -20,7 +14,8 @@ interface GridProps {
   locked: boolean;
   render?: (page: PageRef, edge: number) => Promise<PreviewResult>;
   onSelect: (id: string, range: boolean, toggle: boolean) => void;
-  onSelectAll: () => void;
+  onRotate: (id: string) => void;
+  onDelete: (id: string) => void;
   onOpen: (id: string) => void;
   onMove: (id: string, target: string, after: boolean) => void;
   onFileTarget: (file?: string) => void;
@@ -29,8 +24,9 @@ interface GridProps {
 
 type Marker = { page?: string; file?: string; after?: boolean };
 
-export function PageGrid({ pages, selected, locked, render, onSelect, onSelectAll, onOpen, onMove, onFileTarget, onInsert }: GridProps) {
+export function PageGrid({ pages, selected, locked, render, onSelect, onRotate, onDelete, onOpen, onMove, onFileTarget, onInsert }: GridProps) {
   const viewport = useRef<HTMLDivElement>(null);
+  const track = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ columns: 2, height: 360 });
   const [scroll, setScroll] = useState(0);
   const [cache, setCache] = useState<ReadonlyMap<string, Blob | null>>(() => new Map());
@@ -50,8 +46,8 @@ export function PageGrid({ pages, selected, locked, render, onSelect, onSelectAl
   const first = Math.max(0, firstVisible - 1);
   const last = Math.min(rows, lastVisible + 1);
   const visible = pages.slice(firstVisible * columns, lastVisible * columns);
-  const next = visible.find(page => !cache.has(keyFor(page)));
-  const nextKey = next && keyFor(next);
+  const next = visible.find(page => !cache.has(pageRenderKey(page)));
+  const nextKey = next && pageRenderKey(next);
   const mounted = pages.slice(first * columns, last * columns).map((page, offset) => ({ page, index: first * columns + offset }));
   if (draggedId && !mounted.some(({ page }) => page.id === draggedId)) {
     const index = pages.findIndex(page => page.id === draggedId);
@@ -69,7 +65,7 @@ export function PageGrid({ pages, selected, locked, render, onSelect, onSelectAl
   useLayoutEffect(() => {
     const element = viewport.current!;
     const measure = () => setBox({
-      columns: Math.max(2, Math.floor((element.clientWidth - 16 + gap) / (132 + gap))),
+      columns: Math.max(1, Math.floor((track.current!.clientWidth + gap) / (132 + gap))),
       height: element.clientHeight,
     });
     measure();
@@ -121,11 +117,6 @@ export function PageGrid({ pages, selected, locked, render, onSelect, onSelectAl
   function key(event: KeyboardEvent, index: number) {
     if (locked) return;
     const current = pages[index];
-    if (event.key.toLowerCase() === 'a' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      onSelectAll();
-      return;
-    }
     const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -columns, ArrowDown: columns }[event.key];
     const target = event.key === 'Home' ? 0 : event.key === 'End' ? pages.length - 1 : index + (delta ?? 0);
     if (target === index || target < 0 || target >= pages.length) return;
@@ -218,15 +209,16 @@ export function PageGrid({ pages, selected, locked, render, onSelect, onSelectAl
   return (
     <div className="pdf-grid" ref={viewport} aria-label="Pages in document" role="region"
       onScroll={event => setScroll(event.currentTarget.scrollTop)}>
-      <div className="pdf-track" role="list" style={{ height: rows * rowHeight - gap }}>
+      <div className="pdf-track" ref={track} role="list" style={{ height: rows * rowHeight - gap }}>
         {mounted.map(({ page, index }) => {
-          const thumbnail = cache.get(keyFor(page));
+          const thumbnail = cache.get(pageRenderKey(page));
           const onKey = (event: KeyboardEvent) => key(event, index);
           return <div key={page.id} className="pdf-cell" data-pdf-page={page.id} role="listitem"
             aria-setsize={pages.length} aria-posinset={index + 1}
             data-drop={marker.page === page.id ? marker.after ? 'after' : 'before' : undefined}
             style={{
               top: Math.floor(index / columns) * rowHeight,
+              height: rowHeight - gap,
               left: `calc((100% + ${gap}px) * ${index % columns} / ${columns})`,
               width: `calc((100% + ${gap}px) / ${columns} - ${gap}px)`,
             }}>
@@ -237,15 +229,23 @@ export function PageGrid({ pages, selected, locked, render, onSelect, onSelectAl
               <PageThumbnail blob={thumbnail} />
               <span className="pdf-page-number">{index + 1}</span>
             </button>
-            <Button className="pdf-drag-page" variant="secondary" size="icon-sm" type="button"
-              aria-label={`Drag page ${index + 1}`} title="Drag page or use Alt + Arrow keys" disabled={locked}
-              aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight" onKeyDown={onKey} onClick={() => {
-                if (!suppressClick.current) onSelect(page.id, false, false);
-                suppressClick.current = false;
-              }}
-              onPointerDown={event => start(event, page.id)} onPointerMove={move}
-              onPointerUp={event => end(event, true)} onPointerCancel={event => end(event, false)}
-              onLostPointerCapture={event => end(event, false)}><GripVertical aria-hidden /></Button>
+            <div className="pdf-page-toolbar">
+              <Button className="pdf-drag-page" variant="ghost" size="icon-sm" type="button"
+                aria-label={`Drag page ${index + 1}`} title="Drag page or use Alt + Arrow keys" disabled={locked}
+                aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight" onKeyDown={onKey} onClick={() => {
+                  if (!suppressClick.current) onSelect(page.id, false, false);
+                  suppressClick.current = false;
+                }}
+                onPointerDown={event => start(event, page.id)} onPointerMove={move}
+                onPointerUp={event => end(event, true)} onPointerCancel={event => end(event, false)}
+                onLostPointerCapture={event => end(event, false)}><GripVertical aria-hidden /></Button>
+              <Button className="pdf-quick-action" variant="ghost" size="icon-sm" type="button"
+                aria-label={`Rotate page ${index + 1}`} title={`Rotate page ${index + 1} right`} disabled={locked}
+                onClick={() => onRotate(page.id)}><RotateCw aria-hidden /></Button>
+              <Button className="pdf-quick-action" variant="ghost" size="icon-sm" type="button"
+                aria-label={`Delete page ${index + 1}`} title={pages.length === 1 ? 'Keep at least one page in the PDF.' : `Delete page ${index + 1}`}
+                disabled={locked || pages.length === 1} onClick={() => onDelete(page.id)}><Trash2 aria-hidden /></Button>
+            </div>
           </div>;
         })}
       </div>

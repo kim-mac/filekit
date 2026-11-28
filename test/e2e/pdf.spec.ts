@@ -9,6 +9,8 @@ import { fixturePath, waitForFonts } from './helpers';
 const pageButton = (page: Page, number: number) => page.getByRole('button', { name: `Page ${number}`, exact: true });
 const selectTool = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
 const files = (page: Page) => page.getByRole('region', { name: 'Files' });
+const organize = (page: Page, name: string) => page.getByRole('tabpanel', { name: 'Organize' }).getByRole('button', { name, exact: true });
+const history = (page: Page, name: 'Undo' | 'Redo') => page.getByRole('button', { name, exact: true }).click();
 test.describe.configure({ timeout: 45_000 });
 
 async function open(page: Page, ...names: string[]) {
@@ -34,26 +36,143 @@ test('organizes, previews and exports edited pages', async ({ page }) => {
   await pageButton(page, 1).focus();
   await page.keyboard.press('Alt+ArrowRight');
   await expect(pageButton(page, 2)).toHaveAttribute('aria-pressed', 'true');
-  await page.getByLabel('Page action').selectOption('rotate180');
-  await page.getByRole('button', { name: 'Apply organize' }).click();
+  await organize(page, 'Rotate right').click();
   await pageButton(page, 3).click();
-  await page.getByLabel('Page action').selectOption('delete');
-  await page.getByRole('button', { name: 'Apply organize' }).click();
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await organize(page, 'Delete').click();
+  await history(page, 'Undo');
   await expect(pageButton(page, 4)).toBeVisible();
-  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await history(page, 'Redo');
   await expect(pageButton(page, 4)).toHaveCount(0);
   await pageButton(page, 2).click();
   await page.getByRole('button', { name: 'Single page' }).click();
   await expect(page.getByRole('img', { name: 'Preview of page 2' })).toBeVisible();
   await page.getByRole('button', { name: 'Zoom in' }).click();
   await page.getByRole('button', { name: 'Details', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'PDF document details' })).toContainText('300 × 400 pt');
+  await expect(page.getByRole('dialog', { name: 'PDF document details' })).toContainText('400 × 300 pt');
   await page.keyboard.press('Escape');
   const output = await download(page, 'Export PDF');
   expect(output.name).toBe('mixed.pdf');
   const pdf = await PDFDocument.load(output.bytes);
-  expect(pdf.getPages().map(item => [item.getWidth(), item.getRotation().angle])).toEqual([[350, 90], [300, 180], [300, 0]]);
+  expect(pdf.getPages().map(item => [item.getWidth(), item.getRotation().angle])).toEqual([[350, 90], [300, 90], [300, 0]]);
+});
+
+test('applies Organize buttons immediately and disables them without a selection', async ({ page }) => {
+  await open(page, 'pdf/mixed.pdf');
+  const actions = ['Rotate left', 'Rotate right', 'Delete', 'Duplicate', 'Insert blank page'];
+  await expect(page.getByRole('button', { name: 'Apply organize' })).toHaveCount(0);
+  await expect(page.getByLabel('Page action')).toHaveCount(0);
+  await pageButton(page, 1).click({ modifiers: ['ControlOrMeta'] });
+  await expect(page.getByText('Select pages to edit', { exact: true })).toBeVisible();
+  for (const action of actions) await expect(organize(page, action)).toBeDisabled();
+
+  await pageButton(page, 2).click();
+  await pageButton(page, 3).click({ modifiers: ['Shift'] });
+  await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
+  await organize(page, 'Rotate left').click();
+  await organize(page, 'Duplicate').click();
+  await history(page, 'Undo');
+  await expect(pageButton(page, 5)).toHaveCount(0);
+  await history(page, 'Redo');
+  await expect(pageButton(page, 6)).toBeVisible();
+  await organize(page, 'Insert blank page').click();
+  await history(page, 'Undo');
+  await expect(pageButton(page, 7)).toHaveCount(0);
+  await history(page, 'Redo');
+  const output = await download(page, 'Export PDF');
+  const pdf = await PDFDocument.load(output.bytes);
+  expect(pdf.getPages().map(item => [item.getWidth(), item.getRotation().angle])).toEqual([
+    [300, 0], [350, 0], [350, 0], [400, 270], [595.28, 0], [400, 270], [300, 0],
+  ]);
+});
+
+test('shows page quick actions on hover or touch and edits only that page', async ({ page, isMobile }) => {
+  await open(page, 'pdf/mixed.pdf');
+  const rotate = page.getByRole('button', { name: 'Rotate page 2' });
+  const remove = page.getByRole('button', { name: 'Delete page 3' });
+  if (!isMobile) {
+    await expect(rotate).toHaveCSS('pointer-events', 'none');
+    await pageButton(page, 2).hover();
+  }
+  await expect(rotate).toHaveCSS('pointer-events', 'auto');
+  if (isMobile) await rotate.tap();
+  else await rotate.click();
+  if (!isMobile) await pageButton(page, 3).hover();
+  await expect(remove).toHaveCSS('pointer-events', 'auto');
+  if (isMobile) await remove.tap();
+  else await remove.click();
+  await expect(pageButton(page, 1)).toHaveAttribute('aria-pressed', 'true');
+  await history(page, 'Undo');
+  await expect(pageButton(page, 4)).toBeVisible();
+  await history(page, 'Redo');
+  await expect(pageButton(page, 4)).toHaveCount(0);
+  const { bytes } = await download(page, 'Export PDF');
+  const pdf = await PDFDocument.load(bytes);
+  expect(pdf.getPages().map(item => [item.getWidth(), item.getRotation().angle])).toEqual([[300, 0], [350, 180], [300, 0]]);
+});
+
+test('uses keyboard shortcuts to edit pages and preserves native shortcuts in text fields', async ({ page }) => {
+  await open(page, 'pdf/mixed.pdf');
+  await pageButton(page, 3).click();
+  await page.keyboard.press('r');
+  await page.keyboard.press('Shift+R');
+  await page.keyboard.press('Shift+R');
+  await page.keyboard.press('ControlOrMeta+d');
+  await expect(pageButton(page, 5)).toBeVisible();
+  await pageButton(page, 1).click();
+  await page.keyboard.press('Delete');
+  await expect(pageButton(page, 5)).toHaveCount(0);
+  await expect(pageButton(page, 1)).toBeFocused();
+  await pageButton(page, 4).click();
+  await page.keyboard.press('Backspace');
+  await expect(pageButton(page, 4)).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(pageButton(page, 4)).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect(pageButton(page, 4)).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+a');
+  await expect(page.getByText('3 selected', { exact: true })).toBeVisible();
+
+  await selectTool(page, 'Split / extract');
+  await page.getByLabel('Split method').selectOption('extract-ranges');
+  const ranges = page.getByLabel('Page ranges');
+  await ranges.fill('1-3');
+  await ranges.press('ControlOrMeta+a');
+  await ranges.press('Backspace');
+  await expect(ranges).toBeEmpty();
+  await expect(page.getByText('3 selected', { exact: true })).toBeVisible();
+  const { bytes } = await download(page, 'Export PDF');
+  expect((await PDFDocument.load(bytes)).getPages().map(item => [item.getWidth(), item.getRotation().angle]))
+    .toEqual([[350, 90], [400, 270], [400, 270]]);
+});
+
+test('renders each PDF’s current first page in the Files strip', async ({ page }) => {
+  await open(page, 'pdf/mixed.pdf', 'pdf/scan.pdf');
+  const mixed = files(page).getByRole('button', { name: /^mixed\.pdf/ });
+  const scan = files(page).getByRole('button', { name: /^scan\.pdf/ });
+  for (const [tile, count] of [[mixed, '4 pages'], [scan, '1 page']] as const) {
+    await tile.scrollIntoViewIfNeeded();
+    await expect(tile).toContainText(count);
+    await expect(tile.locator('img')).toBeVisible();
+    await expect.poll(() => tile.locator('img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    await expect(tile.locator('img')).toHaveAttribute('src', /^blob:/);
+  }
+  await mixed.scrollIntoViewIfNeeded();
+  const first = await mixed.locator('img').getAttribute('src');
+  await organize(page, 'Delete').click();
+  await expect(mixed).toContainText('3 pages');
+  await expect(mixed.locator('img')).not.toHaveAttribute('src', first!);
+  await history(page, 'Undo');
+  await expect(mixed).toContainText('4 pages');
+
+  const buffer = await readFile(fixturePath('pdf/scan.pdf'));
+  await page.getByLabel('PDF and image files').setInputFiles(Array.from({ length: 8 }, (_, index) => ({
+    name: `scan-${index + 1}.pdf`, mimeType: 'application/pdf', buffer,
+  })));
+  const last = files(page).getByRole('button', { name: /^scan-8\.pdf/ });
+  await expect(last).toContainText('1 page', { timeout: 15_000 });
+  await expect(last.locator('img')).toHaveCount(0);
+  await last.scrollIntoViewIfNeeded();
+  await expect(last.locator('img')).toHaveAttribute('src', /^blob:/);
 });
 
 test('drags pages with a mouse or touch and copies pages between desktop files', async ({ page, isMobile, browserName }) => {
@@ -227,6 +346,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.setViewportSize(original);
     const { violations } = await new AxeBuilder({ page }).setLegacyMode().analyze();
     expect(violations.filter(({ impact }) => impact === 'serious' || impact === 'critical')).toEqual([]);
+    const cover = files(page).getByRole('button', { name: /^mixed\.pdf/ });
+    await cover.scrollIntoViewIfNeeded();
+    await expect(cover.locator('img')).toBeVisible();
+    await expect.poll(() => cover.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+    await page.evaluate(() => window.scrollTo(0, 0));
     const screenshot = `pdf-workspace-${colorScheme}.png`;
     const capture = { fullPage: true, animations: 'disabled', scale: 'device' } as const;
     await page.screenshot({ path: info.outputPath(screenshot), ...capture });

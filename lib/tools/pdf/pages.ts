@@ -21,6 +21,12 @@ export type PageOperation =
 
 export const rotationDegrees = (rotation: number) => (rotation % 360 + 360) % 360;
 
+export function pageRenderKey(page: PageRef) {
+  if (page.kind === 'pdf') return `${page.source}:${page.index}:${page.rotation}`;
+  if (page.kind === 'image') return JSON.stringify([page.source, page.rotation, page.layout]);
+  return JSON.stringify([page.rotation, page.size]);
+}
+
 export function pdfPages(source: string, count: number): PageRef[] {
   return Array.from({ length: count }, (_, index) => ({ id: `${source}:${index}`, kind: 'pdf', source, index, rotation: 0 }));
 }

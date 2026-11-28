@@ -1,5 +1,6 @@
-import { Combine, FileImage, Files, ImagePlus, PanelsTopLeft } from 'lucide-react';
+import { Combine, Copy, FileImage, FilePlus2, Files, ImagePlus, PanelsTopLeft, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
 import type { ComponentProps } from 'react';
+import { Button } from '../../../components/ui/button';
 import { Select } from '../../../components/ui/select';
 import type { ToolDefinition } from '../../core/contracts';
 import { CategoryRegistry } from '../../core/registry';
@@ -48,40 +49,41 @@ const ids = (pages: readonly PageRef[]) => pages.map(page => page.id);
 const withNewIds = (pages: readonly PageRef[]) => pages.map(page => ({ ...page, id: crypto.randomUUID() }));
 const countLabel = (count: number) => `${count} ${count === 1 ? 'page' : 'pages'}`;
 
-const organizeActions = ['rotate90', 'rotateLeft', 'rotate180', 'delete', 'duplicate', 'blank'] as const;
-interface OrganizeOptions { action: typeof organizeActions[number]; paper: 'a4' | 'letter' }
+const organizeActions = [
+  { action: 'rotateLeft', label: 'Rotate left', icon: RotateCcw, keys: 'Shift+R', title: 'Rotate left (Shift+R)' },
+  { action: 'rotateRight', label: 'Rotate right', icon: RotateCw, keys: 'R', title: 'Rotate right (R)' },
+  { action: 'delete', label: 'Delete', icon: Trash2, keys: 'Delete Backspace', title: 'Delete (Delete or Backspace)' },
+  { action: 'duplicate', label: 'Duplicate', icon: Copy, keys: 'Control+D Meta+D', title: 'Duplicate (Ctrl/⌘ D)' },
+  { action: 'blank', label: 'Insert blank page', icon: FilePlus2, keys: undefined, title: 'Insert a blank A4 page after the selection' },
+] as const;
+export type OrganizeAction = typeof organizeActions[number]['action'];
+interface OrganizeOptions { action: OrganizeAction }
 
 const organize: PdfTool<OrganizeOptions> = {
-  id: 'organize', name: 'Organize', category: 'pdf', icon: PanelsTopLeft,
-  defaultOptions: { action: 'rotate90', paper: 'a4' },
+  id: 'organize', name: 'Organize', category: 'pdf', icon: PanelsTopLeft, actionLabel: false,
+  defaultOptions: { action: 'rotateRight' },
   parseOptions(value) {
-    const { action, paper } = fieldValue(value);
-    return { action: choice(action, organizeActions, 'rotate90'), paper: choice(paper, ['a4', 'letter'], 'a4') };
+    return { action: choice(fieldValue(value).action, organizeActions.map(item => item.action), 'rotateRight') };
   },
   getApplyError({ action }, { selected, pages }) {
-    if (action === 'blank') return;
-    if (!selected.length) return 'Select pages first.';
+    if (!selected.length) return 'Select pages to edit';
     if (action === 'delete' && selected.length === pages.length) return 'Keep at least one page in the PDF.';
   },
-  OptionsPanel({ value, context, onChange }) {
-    const message = organize.getApplyError?.(value, context);
+  OptionsPanel({ context, onApply }) {
+    const message = organize.getApplyError?.({ action: 'delete' }, context);
     return <div className="option-fields">
-      <Choice label="Page action" value={value.action} onChange={event => onChange({ ...value, action: event.target.value as OrganizeOptions['action'] })}>
-        <option value="rotate90">Rotate right 90°</option>
-        <option value="rotateLeft">Rotate left 90°</option>
-        <option value="rotate180">Rotate 180°</option>
-        <option value="delete">Delete selected pages</option>
-        <option value="duplicate">Duplicate selected pages</option>
-        <option value="blank">Insert blank page</option>
-      </Choice>
-      {value.action === 'blank' && <Choice label="Blank page size" value={value.paper}
-        onChange={event => onChange({ ...value, paper: event.target.value as OrganizeOptions['paper'] })}>
-        <option value="a4">A4</option><option value="letter">Letter</option>
-      </Choice>}
+      <div className="pdf-actions pdf-organize-actions" role="group" aria-label="Edit selected pages">
+        {organizeActions.map(({ action, label, icon: Icon, keys, title }) => (
+          <Button key={action} type="button" variant="outline" size="sm" title={title} aria-keyshortcuts={keys}
+            disabled={Boolean(organize.getApplyError?.({ action }, context))} onClick={() => onApply({ action })}>
+            <Icon aria-hidden /> {label}
+          </Button>
+        ))}
+      </div>
       {message && <p className="section-note">{message}</p>}
     </div>;
   },
-  async apply(state, { action, paper }) {
+  async apply(state, { action }) {
     const selected = ids(state.selected);
     let operation: PageOperation;
     let message: string;
@@ -92,10 +94,10 @@ const organize: PdfTool<OrganizeOptions> = {
       operation = { kind: 'duplicate', ids: selected, newIds: selected.map(() => crypto.randomUUID()) };
       message = `Duplicated ${countLabel(selected.length)}.`;
     } else if (action === 'blank') {
-      operation = { kind: 'insert', after: selected.at(-1), pages: [{ kind: 'blank', id: crypto.randomUUID(), rotation: 0, size: paper === 'a4' ? a4 : letter }] };
+      operation = { kind: 'insert', after: selected.at(-1), pages: [{ kind: 'blank', id: crypto.randomUUID(), rotation: 0, size: a4 }] };
       message = 'Inserted a blank page.';
     } else {
-      operation = { kind: 'rotate', ids: selected, clockwise: action === 'rotate180' ? 180 : action === 'rotateLeft' ? -90 : 90 };
+      operation = { kind: 'rotate', ids: selected, clockwise: action === 'rotateLeft' ? -90 : 90 };
       message = `Rotated ${countLabel(selected.length)}.`;
     }
     return { ...state, result: { kind: 'edit', operation, message } };
