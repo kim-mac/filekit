@@ -14,7 +14,7 @@ const licenses = [
 
 export default function LicensesPage() {
   return (
-    <main className="home licenses">
+    <main className="home licenses page-container">
       <Button asChild variant="link"><Link href="/" prefetch={false}>FileKit home</Link></Button>
       <Card className="license-card">
         <h1>Licenses</h1>

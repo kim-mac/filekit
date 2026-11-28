@@ -1,20 +1,16 @@
 import Link from 'next/link';
-import { ArrowUpRight, AudioLines, FileText, Image, Layers, ShieldCheck, Video } from 'lucide-react';
+import { ArrowUpRight, AudioLines, FileText, Image, Video } from 'lucide-react';
 import { categories } from '../lib/core/categories';
 import { Card } from '../components/ui/card';
+import { SiteHeader } from '../components/site-header';
 
 const icons = { image: Image, pdf: FileText, audio: AudioLines, video: Video };
 
 export default function HomePage() {
   return (
     <>
-      <header className="site-header">
-        <div className="site-bar">
-          <Link href="/" prefetch={false} className="wordmark" aria-label="FileKit home"><Layers className="brand-icon" size={20} aria-hidden />FileKit</Link>
-          <span className="privacy"><ShieldCheck size={17} aria-hidden /> Private by design</span>
-        </div>
-      </header>
-      <main className="home">
+      <SiteHeader />
+      <main className="home page-container">
         <div className="home-intro">
           <h1>FileKit<span>.</span></h1>
           <p>File tools that run on your device.</p>

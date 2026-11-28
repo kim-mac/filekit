@@ -17,6 +17,10 @@ export interface PreviewRequest extends ImageRequest {
   readonly thumbnail?: boolean;
 }
 
+export interface ImageExportRequest extends ImageRequest {
+  readonly format?: 'png';
+}
+
 export interface ComparisonRequest extends Pick<ImageRequest, 'id' | 'original'> {
   readonly mapping: SourceMapping;
 }
@@ -75,6 +79,6 @@ export interface ImageWorkerApi {
   renderDraft(request: Pick<ImageRequest, 'id' | 'commands'>): Promise<ImageData | undefined>;
   renderPreview(request: PreviewRequest, onProgress: ProgressCallback): Promise<PreviewResult>;
   renderComparison(request: ComparisonRequest): Promise<Blob>;
-  exportImage(request: ImageRequest, onProgress: ProgressCallback): Promise<ImageExport>;
+  exportImage(request: ImageExportRequest, onProgress: ProgressCallback): Promise<ImageExport>;
   exportZip(requests: readonly ImageRequest[], onProgress: ProgressCallback): Promise<ZipResult>;
 }

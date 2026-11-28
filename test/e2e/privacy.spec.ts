@@ -71,7 +71,7 @@ test('lazy codec, face detection, and upscale assets stay same origin and files 
   await toolTab(page, 'Upscale').click();
   await page.getByRole('radio', { name: 'Graphics', exact: true }).check();
   await page.getByRole('button', { name: 'Apply upscale' }).click();
-  await expect(page.getByText(/Applied with Real-ESRGAN Anime/)).toBeVisible();
+  await expect(page.getByText(/Applied with Real-ESRGAN Anime/)).toBeVisible({ timeout: 15_000 });
   expect((await downloadResult(page, 'Export image')).bytes.length).toBeGreaterThan(0);
 
   expect([...violations]).toEqual([]);

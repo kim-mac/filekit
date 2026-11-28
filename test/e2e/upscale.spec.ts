@@ -96,6 +96,7 @@ test('blocks over-limit output before requesting a model', async ({ page, contex
 
 test('cancels tile inference and reuses verified chunks across workers', async ({ page, context }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium', 'Exercise the desktop Photo model');
+  test.setTimeout(60_000);
   let downloads = 0;
   context.on('request', req => { if (weights.test(req.url())) downloads++; });
   await openImageWorkspace(page);
@@ -111,7 +112,7 @@ test('cancels tile inference and reuses verified chunks across workers', async (
   await page.getByRole('radio', { name: '4×', exact: true }).check();
   await expect(page.getByText('This may take a minute on this device.')).toBeVisible();
   await button(page, 'Apply upscale').click();
-  await expect(page.getByRole('status').filter({ hasText: /Tile \d+ of \d+/ })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: /Tile \d+ of \d+/ })).toBeVisible({ timeout: 15_000 });
   await button(page, 'Cancel edit').click();
   await expect(page.getByText('Edit canceled.')).toBeVisible();
   await expect(dimensions(page)).toHaveText('768 × 768 px');

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Download, Ellipsis, Image, LoaderCircle, Pencil, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, Download, Ellipsis, Image, LoaderCircle, Pencil, X } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import { useId, useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import { sanitizeBaseName } from '../../lib/core/file-name';
@@ -24,6 +24,7 @@ interface FileTileProps {
   dropTarget: boolean;
   onSelect: () => void;
   onDownload: () => void;
+  onCopy?: () => void;
   onRemove: () => void;
   onRename: (name: string) => void;
   onMove: (direction: -1 | 1) => void;
@@ -33,7 +34,7 @@ interface FileTileProps {
 
 export function FileTile({
   id, name, baseName, extension, thumbnail, selected, status, processing, error, disabled, ready,
-  canMoveLeft, canMoveRight, dragSource, dropTarget, onSelect, onDownload, onRemove, onRename, onMove, onDrag, onDragEnd,
+  canMoveLeft, canMoveRight, dragSource, dropTarget, onSelect, onDownload, onCopy, onRemove, onRename, onMove, onDrag, onDragEnd,
 }: FileTileProps) {
   const url = useObjectUrl(thumbnail);
   const [draft, setDraft] = useState<string>();
@@ -127,13 +128,18 @@ export function FileTile({
                 }
               }} aria-label={`Rename ${name}`} title="Rename file" type="button" size="icon-sm"
                 variant="secondary" disabled={disabled} onClick={() => setDraft(baseName)}><Pencil aria-hidden /></Button>
-              <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+              <DropdownMenu.Root open={menuOpen} onOpenChange={open => {
+                if (!open || !disabled) setMenuOpen(open);
+              }} modal={false}>
                 <DropdownMenu.Trigger asChild>
                   <Button aria-label={`Actions for ${name}`} title="File actions" type="button" size="icon-sm"
-                    variant="secondary" disabled={disabled || (!canMoveLeft && !canMoveRight)}><Ellipsis aria-hidden /></Button>
+                    variant="secondary" aria-disabled={disabled || undefined} disabled={!ready && !canMoveLeft && !canMoveRight}>
+                    <Ellipsis aria-hidden />
+                  </Button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content className="file-menu" sideOffset={4} align="start">
+                    <DropdownMenu.Item disabled={!onCopy} onSelect={onCopy}><Copy size={16} aria-hidden /> Copy image</DropdownMenu.Item>
                     <DropdownMenu.Item disabled={!canMoveLeft} onSelect={() => onMove(-1)}><ArrowLeft size={16} aria-hidden /> Move left</DropdownMenu.Item>
                     <DropdownMenu.Item disabled={!canMoveRight} onSelect={() => onMove(1)}><ArrowRight size={16} aria-hidden /> Move right</DropdownMenu.Item>
                   </DropdownMenu.Content>

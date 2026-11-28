@@ -14,7 +14,8 @@ import { applyRegionBlur } from './blur';
 import { decodeImage, encodeImage } from './codecs';
 import { hasTransparency, previewMaxEdge, renderGeometry, resizePreview } from './pixels';
 import type {
-  ComparisonRequest, FileFailure, ImageExport, ImageProgress, ImageRequest, ImageStage, PreviewRequest, PreviewResult, ProgressCallback, ZipResult,
+  ComparisonRequest, FileFailure, ImageExport, ImageExportRequest, ImageProgress, ImageRequest, ImageStage,
+  PreviewRequest, PreviewResult, ProgressCallback, ZipResult,
 } from './types';
 
 type ReportStage = (stage: ImageStage, detail?: string, tiles?: ImageProgress['tiles'], download?: ImageProgress['download']) => void;
@@ -279,13 +280,13 @@ async function upscalePrefix(
 
 async function finishUpscale(
   raster: UpscaledRaster, program: UpscaleProgram, preview: boolean,
-  cached = preview,
+  cached = preview, format?: ImageExportRequest['format'],
 ) {
   let state = await imageTools.replay({
     geometry: fullGeometry(raster.size), output: keepOriginalOptions,
   }, program.suffix);
   if (program.conversion) state = await imageTools.get('convert').apply(state, program.conversion.options);
-  const output = resolveOutput(raster.format, state.output);
+  const output = resolveOutput(raster.format, format ? { ...state.output, format } : state.output);
   const mode = cached ? 'preserve' : output.format === 'avif' ? 'orient' : 'compact';
   let frame = await rasterStage(raster.frame, raster.size, state, raster.mapping, mode);
   const hasAlpha = preview && hasTransparency(frame);
@@ -326,13 +327,13 @@ async function renderUpscaledPreview(request: PreviewRequest, program: UpscalePr
   };
 }
 
-async function prepareExport(request: ImageRequest, report: ReportStage) {
+async function prepareExport(request: ImageExportRequest, report: ReportStage) {
   const upscale = upscaleProgram(request.commands);
   if (upscale) {
     const cached = activeFile === request.id && activeUpscaled?.key === upscale.key ? activeUpscaled.full : undefined;
     const raster = cached ?? await upscalePrefix(request, upscale, report);
     report('Applying edits');
-    return finishUpscale(raster, upscale, false, Boolean(cached));
+    return finishUpscale(raster, upscale, false, Boolean(cached), request.format);
   }
   releaseFullPreview();
   // The matte is stored in EXIF-normalized source coordinates. Keep the
@@ -343,7 +344,7 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
     geometry: fullGeometry(original, hasBackground ? 1 : orientation), output: keepOriginalOptions,
   }, request.commands);
   const { geometry, output: conversion, backgroundEdit, blurEdits } = state;
-  const output = resolveOutput(format, conversion);
+  const output = resolveOutput(format, request.format ? { ...conversion, format: request.format } : conversion);
   // The AVIF wrapper reads the entire backing buffer, so crops need a dense raster.
   const mode = output.format === 'avif' ? 'orient' : 'compact';
   report('Applying edits');
@@ -355,7 +356,7 @@ async function prepareExport(request: ImageRequest, report: ReportStage) {
   return { frame: renderGeometry(bounded, mapped, mode), output };
 }
 
-async function encodeRequest(request: ImageRequest, report: ReportStage): Promise<ImageExport> {
+async function encodeRequest(request: ImageExportRequest, report: ReportStage): Promise<ImageExport> {
   const { frame, output } = await prepareExport(request, report);
   report('Encoding');
   try {
@@ -366,7 +367,7 @@ async function encodeRequest(request: ImageRequest, report: ReportStage): Promis
   }
 }
 
-export function exportImage(request: ImageRequest, progress: ProgressCallback): Promise<ImageExport> {
+export function exportImage(request: ImageExportRequest, progress: ProgressCallback): Promise<ImageExport> {
   return encodeRequest(request, (stage, detail, tiles, download) => progress({ id: request.id, stage, detail, tiles, download, index: 1, total: 1 }));
 }
 
