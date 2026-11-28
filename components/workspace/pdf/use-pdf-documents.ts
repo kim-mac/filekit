@@ -86,13 +86,18 @@ export function usePdfDocuments(mobile: boolean) {
     const progress = (update: ToolProgress) => {
       if (current) setWork({ id: pendingId, progress: update });
     };
+    function finish() {
+      if (!current) return false;
+      // Comlink progress and the result arrive on separate ports.
+      current = false;
+      setWork(value => value?.id === pendingId ? undefined : value);
+      return true;
+    }
     progress({ message: 'Opening file', step: 1, totalSteps: 3 });
     void client.inspect(pendingId, pendingFile, pendingKind, undefined, mobile, progress).then(result => {
-      if (current) accept(result, pendingId, pendingFile);
+      if (finish()) accept(result, pendingId, pendingFile);
     }, error => {
-      if (current) setEntry(pendingId, { status: 'error', error: openError(pendingKind, error) });
-    }).finally(() => {
-      if (current) setWork(value => value?.id === pendingId ? undefined : value);
+      if (finish()) setEntry(pendingId, { status: 'error', error: openError(pendingKind, error) });
     });
     return () => { current = false; };
   }, [pendingId, pendingKind, pendingFile, client, mobile, accept, unlocking]);
@@ -161,12 +166,13 @@ export function usePdfDocuments(mobile: boolean) {
   async function unlock(password: string) {
     if (!lockedFile || !canUnlock.current) return;
     const { id, stack } = lockedFile;
+    let acceptingProgress = true;
     canUnlock.current = false;
     setUnlocking(true);
     setPasswordError('');
     try {
       const result = await client.inspect(id, stack.original, 'pdf', password, mobile, progress => {
-        if (live.current) setWork({ id, progress });
+        if (live.current && acceptingProgress) setWork({ id, progress });
       });
       if (!live.current) return;
       if (result.kind === 'password') {
@@ -178,6 +184,7 @@ export function usePdfDocuments(mobile: boolean) {
     } catch (error) {
       if (live.current) setPasswordError(openError('pdf', error));
     } finally {
+      acceptingProgress = false;
       canUnlock.current = true;
       if (live.current) {
         setWork(current => current?.id === id ? undefined : current);

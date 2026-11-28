@@ -84,6 +84,7 @@ test('drags pages with a mouse or touch and copies pages between desktop files',
   await expect(pageButton(page, 2)).toHaveAttribute('aria-pressed', 'true');
   if (isMobile) return;
   const tile = files(page).getByRole('button', { name: /^scan\.pdf/ });
+  await expect(page.getByRole('progressbar', { name: 'Open progress' })).toBeHidden({ timeout: 15_000 });
   await expect(tile).toContainText('1 page', { timeout: 15_000 });
   await tile.scrollIntoViewIfNeeded();
   const handle = (await page.getByRole('button', { name: 'Drag page 2' }).boundingBox())!;
@@ -145,6 +146,7 @@ test('opens encrypted PDFs with a local password and reports corrupt inputs', as
   await dialog.getByLabel('Password', { exact: true }).fill('filekit-test');
   await dialog.getByRole('button', { name: 'Unlock' }).click();
   await expect(dialog).toBeHidden({ timeout: 15_000 });
+  await expect(page.getByRole('progressbar', { name: 'Open progress' })).toBeHidden();
   const output = await download(page, 'Export PDF');
   expect((await PDFDocument.load(output.bytes)).getPageCount()).toBe(1);
   await page.getByLabel('PDF and image files').setInputFiles({ name: 'broken.pdf', mimeType: 'application/pdf', buffer: Buffer.from('damaged') });
