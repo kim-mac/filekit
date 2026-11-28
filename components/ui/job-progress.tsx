@@ -39,7 +39,7 @@ function DownloadProgress({ download, className }: { download: ModelDownload; cl
 
   return (
     <Notice announce={false}>
-      <p>One-time model download (~{format.format(total / megabyte)} MB). It’s saved on this device.</p>
+      <p>One-time model download (~{format.format(total / megabyte)} MB). It’s saved on this device, so next time it starts instantly.</p>
       <ProgressSummary message={message} className={className} />
       <Progress value={percent} aria-label="Model download progress" getValueLabel={() => message} />
       <p>{remaining ? `About ${timeLabel(remaining)} remaining` : 'Estimating time remaining…'}</p>
