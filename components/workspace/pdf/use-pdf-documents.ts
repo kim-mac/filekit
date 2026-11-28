@@ -138,6 +138,11 @@ export function usePdfDocuments(mobile: boolean) {
     const source = page.kind === 'blank' ? undefined : sources.current.get(page.source)?.blob;
     return client.size(page, source, mobile);
   }, [client, mobile]);
+  const inspectPage = useCallback((page: PageRef) => {
+    const source = page.kind === 'blank' ? undefined : sources.current.get(page.source)?.blob;
+    return client.editing(page, source, mobile);
+  }, [client, mobile]);
+  const prepareImage = useCallback((blob: Blob, removeBackground: boolean) => client.prepareImage(blob, removeBackground), [client]);
 
   function addFiles(files: readonly File[]) {
     if (!files.length) return;
@@ -231,6 +236,6 @@ export function usePdfDocuments(mobile: boolean) {
 
   return {
     entries, selected, work, lockedFile, passwordError, unlocking, canRender, sources: sources.current,
-    addFiles, select, closePassword, unlock, remove, move, edit, addDocument, setEntry, render, size,
+    addFiles, select, closePassword, unlock, remove, move, edit, addDocument, setEntry, render, size, inspectPage, prepareImage,
   };
 }

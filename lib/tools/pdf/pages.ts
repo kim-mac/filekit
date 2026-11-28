@@ -1,9 +1,12 @@
 import type { EditCommand } from '../../core/contracts';
 import { defaultImageLayout, type ImageLayout, type PageSize } from './layout';
+import type { FormValue, Overlay } from './overlay';
 
 interface PageBase {
   readonly id: string;
   readonly rotation: number;
+  readonly objects?: readonly Overlay[];
+  readonly fields?: Readonly<Record<string, FormValue>>;
 }
 
 export type PageRef =
@@ -17,6 +20,8 @@ export type PageOperation =
   | { kind: 'delete'; ids: string[] }
   | { kind: 'duplicate'; ids: string[]; newIds: string[] }
   | { kind: 'insert'; after?: string; pages: PageRef[] }
+  | { kind: 'overlay'; id: string; objects: readonly Overlay[] }
+  | { kind: 'form'; id: string; name: string; value: FormValue }
   | { kind: 'layout'; ids: string[]; layout: ImageLayout };
 
 export const rotationDegrees = (rotation: number) => (rotation % 360 + 360) % 360;
@@ -36,6 +41,14 @@ export function imagePage(source: string): PageRef {
 }
 
 export function applyPageOperation(pages: readonly PageRef[], operation: PageOperation): PageRef[] {
+  if (operation.kind === 'overlay') {
+    return pages.map(page => page.id === operation.id ? { ...page, objects: operation.objects } : page);
+  }
+  if (operation.kind === 'form') {
+    const target = pages.find(page => page.id === operation.id);
+    return pages.map(page => target?.kind === 'pdf' && page.kind === 'pdf' && page.source === target.source
+      ? { ...page, fields: { ...page.fields, [operation.name]: operation.value } } : page);
+  }
   if (operation.kind === 'insert') {
     const index = operation.after === undefined ? pages.length : pages.findIndex(page => page.id === operation.after) + 1;
     return [...pages.slice(0, index), ...operation.pages, ...pages.slice(index)];

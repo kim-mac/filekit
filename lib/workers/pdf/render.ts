@@ -3,10 +3,11 @@ import {
 } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { isMemoryError } from '../../core/processing-error';
 import { imagePlacement, pixelDimensions, rotatedSize, type PageSize } from '../../tools/pdf/layout';
+import { boxBetween, pageTransform, pdfToView, type Box, type Matrix } from '../../tools/pdf/overlay';
 import { imagePage, rotationDegrees, type PageRef } from '../../tools/pdf/pages';
 import { decodeImage, encodeImage } from '../image/codecs';
 import { resizePreview } from '../image/pixels';
-import type { IntakeResult, PdfDetails, PreviewResult, RasterOptions, ReportPdfProgress } from './types';
+import type { IntakeResult, PageEditingData, PdfDetails, PreviewResult, RasterOptions, ReportPdfProgress } from './types';
 
 const assetRoot = new URL('/workers/pdf/', self.location.origin).href;
 
@@ -200,7 +201,7 @@ export class PdfRenderer {
       const size = rotatedSize(ref.size, ref.rotation);
       const { canvas } = simplePage(previewDimensions(size, edge), size, 0);
       try {
-        return { size, blob: await canvas.convertToBlob() };
+        return { size, transform: simpleTransform(ref.size, ref.rotation), blob: await canvas.convertToBlob() };
       } finally {
         canvas.width = canvas.height = 0;
       }
@@ -221,7 +222,27 @@ export class PdfRenderer {
     return { width, height };
   }
 
-  async raster(ref: PageRef, blob: Blob | undefined, options: RasterOptions & { mobile: boolean }) {
+  async editing(ref: PageRef, blob: Blob | undefined, mobile: boolean): Promise<PageEditingData> {
+    if (ref.kind !== 'pdf') return { lines: [], widgets: [] };
+    const pdf = await this.document(ref.source, blob!, mobile);
+    const page = await pdf.getPage(ref.index + 1);
+    const lines = (await page.getTextContent()).items.flatMap(item => {
+      if (!('str' in item) || !item.str.trim() || !item.width || !item.height) return [];
+      const [a, b, , , x, y] = item.transform;
+      const length = Math.hypot(a, b) || 1;
+      const dx = a / length;
+      const dy = b / length;
+      const aBox = boxBetween({ x: x + dy * item.height * .2, y: y - dx * item.height * .2 },
+        { x: x + dx * item.width - dy * item.height * .8, y: y + dy * item.width + dx * item.height * .8 });
+      return [aBox];
+    });
+    const { info } = await pdf.getMetadata();
+    const widgets = (info as Record<string, unknown>).IsAcroFormPresent
+      ? await (await import('./forms')).readPageWidgets(blob!, ref.index) : [];
+    return { lines, widgets };
+  }
+
+  async raster(ref: PageRef, blob: Blob | undefined, options: RasterOptions & { mobile: boolean }, masks: Box[] = []) {
     const { mobile, dpi, format } = options;
     let frame: ImageData;
     let limited: boolean;
@@ -230,10 +251,11 @@ export class PdfRenderer {
       const page = await pdf.getPage(ref.index + 1);
       const rotation = rotationDegrees(page.rotate + ref.rotation);
       const size = page.getViewport({ scale: 1, rotation });
-      const dimensions = pixelDimensions(size, dpi, mobile);
+      const dimensions = pixelDimensions(size, dpi, mobile, mobile || masks.length > 0);
       limited = dimensions.limited;
       try {
         frame = await pdfPixels(page, dimensions, rotation);
+        if (masks.length) burnMasks(frame, masks, page.getViewport({ scale: dimensions.scale, rotation }).transform as unknown as Matrix);
       } finally {
         page.cleanup();
       }
@@ -256,6 +278,27 @@ export class PdfRenderer {
     return { limited, blob: await encodeImage(frame, { format, quality: 92, background: '#ffffff' }) };
   }
 }
+
+function burnMasks(frame: ImageData, boxes: Box[], transform: Matrix) {
+  for (const box of boxes) {
+    const rect = boxBetween(pdfToView(transform, box),
+      pdfToView(transform, { x: box.x + box.width, y: box.y + box.height }));
+    const left = Math.max(0, Math.floor(rect.x));
+    const right = Math.min(frame.width, Math.ceil(rect.x + rect.width));
+    const top = Math.max(0, Math.floor(rect.y));
+    const bottom = Math.min(frame.height, Math.ceil(rect.y + rect.height));
+    if (left >= right || top >= bottom) throw new Error('A redaction is outside its page. Move or remove the mark and apply redactions again.');
+    for (let y = top; y < bottom; y++) {
+      for (let x = left; x < right; x++) {
+        const offset = (y * frame.width + x) * 4;
+        frame.data[offset] = frame.data[offset + 1] = frame.data[offset + 2] = 0;
+        frame.data[offset + 3] = 255;
+      }
+    }
+  }
+}
+
+const simpleTransform = ({ width, height }: PageSize, rotation: number) => pageTransform([0, 0, width, height], rotation);
 
 interface Dimensions extends PageSize { scale: number }
 interface Tile extends PageSize { x: number; y: number }
@@ -283,12 +326,12 @@ async function pdfSurface(page: PDFPageProxy, scale: number, rotation: number, {
 
 async function pdfPreview(page: PDFPageProxy, offset: number, edge: number) {
   const rotation = rotationDegrees(page.rotate + offset);
-  const { width, height } = page.getViewport({ scale: 1, rotation });
+  const { width, height, transform } = page.getViewport({ scale: 1, rotation });
   const size = { width, height };
   const dimensions = previewDimensions(size, edge);
   const rendered = await pdfSurface(page, dimensions.scale, rotation, { ...dimensions, x: 0, y: 0 });
   try {
-    return { size, blob: await rendered.canvas.convertToBlob() };
+    return { size, transform: transform as unknown as Matrix, blob: await rendered.canvas.convertToBlob() };
   } finally {
     rendered.canvas.width = rendered.canvas.height = 0;
     page.cleanup();
@@ -320,7 +363,7 @@ async function imagePreview(ref: Extract<PageRef, { kind: 'image' }>, original: 
   try {
     const { canvas } = simplePage(previewDimensions(size, edge), layout, ref.rotation, bitmap, layout);
     try {
-      return { size, blob: await canvas.convertToBlob() };
+      return { size, transform: simpleTransform(layout, ref.rotation), blob: await canvas.convertToBlob() };
     } finally {
       canvas.width = canvas.height = 0;
     }

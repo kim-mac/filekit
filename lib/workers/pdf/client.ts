@@ -44,6 +44,14 @@ export class PdfWorkerClient {
     return this.call(worker => worker.size(page, source, mobile));
   }
 
+  editing(page: PageRef, source: Blob | undefined, mobile: boolean) {
+    return this.call(worker => worker.editing(page, source, mobile));
+  }
+
+  prepareImage(blob: Blob, removeBackground: boolean) {
+    return this.call(worker => worker.prepareImage(blob, removeBackground));
+  }
+
   retain(ids: string[]) {
     if (this.remote) void this.call(worker => worker.retain(ids)).catch(() => {});
   }

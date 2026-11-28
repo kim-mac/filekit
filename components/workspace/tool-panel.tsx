@@ -20,7 +20,7 @@ const useVerticalTools = () => useSyncExternalStore(subscribeToToolLayout,
   () => !isMobileDevice() && window.matchMedia(desktopTools).matches, () => false);
 
 export function ToolPanel<State, Context>({
-  registry, session, onBusyChange, disabled, emptyMessage = 'Add an image to start',
+  registry, session, onBusyChange, onToolChange, disabled, emptyMessage = 'Add an image to start',
 }: {
   registry: CategoryRegistry<State, Context>;
   session?: {
@@ -30,6 +30,7 @@ export function ToolPanel<State, Context>({
     onApply: (command: EditCommand) => void;
   };
   onBusyChange?: (busy: boolean) => void;
+  onToolChange?: (id: string) => void;
   disabled: boolean;
   emptyMessage?: string;
 }) {
@@ -89,7 +90,7 @@ export function ToolPanel<State, Context>({
 
   return (
     <Tabs className="tool-panel" value={activeId} activationMode="manual" orientation={vertical ? 'vertical' : 'horizontal'}
-      onValueChange={id => { setActiveId(id); setStatus(undefined); }}>
+      onValueChange={id => { setActiveId(id); setStatus(undefined); onToolChange?.(id); }}>
       <TabsList className="tool-bar" aria-label="Available tools"
         {...(!vertical && (!session || disabled || busy) ? { tabIndex: 0 } : {})}>
         {tools.map(({ id, name, icon: Icon }) => (
