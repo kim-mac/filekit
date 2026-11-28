@@ -93,9 +93,11 @@ test('home and workspace adapt their layout with the same controls', async ({ pa
   await toolTab(page, 'Remove background').click();
   await expect(page.getByRole('radio', { name: 'Transparent', exact: true })).toBeChecked();
   const removal = page.getByRole('region', { name: 'Tools' });
+  // Keep the floating header out of the card capture when Playwright scrolls to fit it.
+  const style = '.site-header { visibility: hidden; }';
   await waitForFonts(page);
-  await testInfo.attach('background-controls', { body: await removal.screenshot(), contentType: 'image/png' });
-  if (usesSnapshots) await expect(removal).toHaveScreenshot('background-controls.png', { maxDiffPixelRatio: 0.04 });
+  await testInfo.attach('background-controls', { body: await removal.screenshot({ style }), contentType: 'image/png' });
+  if (usesSnapshots) await expect(removal).toHaveScreenshot('background-controls.png', { style, maxDiffPixelRatio: 0.04 });
 
   const lightBackground = await page.locator('body').evaluate(body => getComputedStyle(body).backgroundColor);
   await page.emulateMedia({ colorScheme: 'dark' });
