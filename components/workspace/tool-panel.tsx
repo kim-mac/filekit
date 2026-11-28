@@ -70,7 +70,7 @@ export function ToolPanel<State, Context>({
         onBusyChange(true);
         setProgress({ message: 'Preparing image', step: 1, totalSteps: 3 });
         value = await tool.prepareOptions(value, session.context, controller.signal, update => {
-          if (controller.signal.aborted) return;
+          if (activeJob.current !== controller || controller.signal.aborted) return;
           setProgress(update);
         });
       }

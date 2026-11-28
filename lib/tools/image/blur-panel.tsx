@@ -122,7 +122,8 @@ export default function BlurOptionsPanel({ context, value, onChange }: Props) {
       const key = JSON.stringify([editKey, yuNetSha256]);
       const faces = aiResults.faces?.key === key ? aiResults.faces.boxes
         : await Promise.race([faceApi().findFaces(previewBlob, isMobileDevice(), proxy(update => {
-          if (faceRequest.current === request) setFaceProgress(update);
+          // The worker result can reach this thread before its last progress message.
+          if (faceRequest.current === request && rejectFace.current) setFaceProgress(update);
         })), interrupted]);
       if (faceRequest.current !== request || latest.current.previewBlob !== previewBlob || latest.current.disabled) return;
       aiResults.faces = { key, boxes: faces };
