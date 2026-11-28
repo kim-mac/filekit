@@ -72,9 +72,12 @@ test('the desktop switcher marks Images and keeps upcoming categories disabled',
 });
 
 test('the mobile dropdown fits the logo and privacy badge and supports keyboard navigation', async ({ page, isMobile }) => {
-  await page.setViewportSize({ width: 360, height: 780 });
+  await page.setViewportSize({ width: 441, height: 780 });
   await openImageWorkspace(page);
   const header = page.getByRole('banner');
+  await waitForFonts(page);
+  expect(await header.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  await page.setViewportSize({ width: 360, height: 780 });
   await expect(header.getByRole('link', { name: 'FileKit home' })).toBeInViewport();
   const privacy = header.getByRole('button', { name: 'Files stay on this device' });
   await expect(privacy).toBeInViewport();
