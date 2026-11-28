@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { activeCommands, createEditStack, recordEdit, type EditStack } from '../../../lib/core/edit-stack';
 import { originalBaseName } from '../../../lib/core/file-name';
 import type { ToolProgress } from '../../../lib/core/contracts';
-import type { PageSize } from '../../../lib/tools/pdf/layout';
 import { imagePage, pdfPages, replayPages, type PageOperation, type PageRef } from '../../../lib/tools/pdf/pages';
 import { PdfWorkerClient } from '../../../lib/workers/pdf/client';
 import type { IntakeResult, PdfDetails } from '../../../lib/workers/pdf/types';
@@ -16,7 +15,6 @@ export interface PdfEntry {
   readonly baseName?: string;
   readonly primary?: string;
   readonly details?: PdfDetails;
-  readonly size?: PageSize;
   readonly thumbnail?: Blob;
   readonly error?: string;
 }
@@ -76,7 +74,7 @@ export function usePdfDocuments(mobile: boolean) {
     setEntry(id, {
       status: 'ready', initial: result.kind === 'pdf' ? pdfPages(id, count) : [imagePage(id)],
       primary: result.kind === 'pdf' ? id : undefined, details,
-      size: result.kind === 'image' ? result.size : details?.firstPage, thumbnail: result.thumbnail,
+      thumbnail: result.kind === 'image' ? result.thumbnail : undefined,
     });
   }, []);
 
@@ -213,7 +211,7 @@ export function usePdfDocuments(mobile: boolean) {
     const source = entries.find(entry => entry.id === primary);
     setEntries(current => [...current, {
       id, status: 'ready', kind: 'draft', stack: createEditStack(original), initial, primary,
-      details: source?.details, size: source?.size,
+      details: source?.details,
     }]);
     setSelectedId(id);
   }

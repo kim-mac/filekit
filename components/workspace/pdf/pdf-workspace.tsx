@@ -337,6 +337,7 @@ export function PdfWorkspace() {
               : entry.status === 'queued' ? 'Queued' : 'Could not open';
           return {
             id: entry.id, name: documentName(entry), baseName: documentBaseName(entry), extension: '.pdf', thumbnail: entry.thumbnail,
+            fallbackIcon: entry.kind === 'image' ? undefined : FileText,
             selected: entry.id === activeId, status, processing, error: entry.error, disabled: locked, ready: entry.status === 'ready',
             onSelect: () => selectFile(entry), onRemove: () => {
               const next = entries[index + 1] ?? entries[index - 1];

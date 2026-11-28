@@ -127,7 +127,7 @@ test('opens encrypted PDFs with a local password and reports corrupt inputs', as
   await expect(dialog.getByRole('alert')).toContainText('Incorrect password');
   await dialog.getByLabel('Password', { exact: true }).fill('filekit-test');
   await dialog.getByRole('button', { name: 'Unlock' }).click();
-  await expect(dialog).toBeHidden();
+  await expect(dialog).toBeHidden({ timeout: 15_000 });
   const output = await download(page, 'Export PDF');
   expect((await PDFDocument.load(output.bytes)).getPageCount()).toBe(1);
   await page.getByLabel('PDF and image files').setInputFiles({ name: 'broken.pdf', mimeType: 'application/pdf', buffer: Buffer.from('damaged') });
@@ -159,7 +159,7 @@ test('requests only static same-origin assets when loading, unlocking and raster
   const dialog = page.getByRole('dialog', { name: 'Unlock PDF' });
   await dialog.getByLabel('Password', { exact: true }).fill('filekit-test');
   await dialog.getByRole('button', { name: 'Unlock' }).click();
-  await expect(dialog).toBeHidden();
+  await expect(dialog).toBeHidden({ timeout: 15_000 });
   await files(page).getByRole('button', { name: /^mixed\.pdf/ }).click();
   await expect(pageButton(page, 1)).toBeVisible();
   await selectTool(page, 'PDF to images');

@@ -131,38 +131,36 @@ export class PdfRenderer {
     report: ReportPdfProgress): Promise<IntakeResult> {
     report({ message: kind === 'pdf' ? 'Reading PDF' : 'Decoding image', step: 1, totalSteps: 3 });
     if (kind === 'image') {
-      const image = await this.imagePreview(id, file);
+      await this.imagePreview(id, file);
       report({ message: 'Drawing image preview', step: 3, totalSteps: 3 });
       const thumbnail = await this.preview(imagePage(id), file, 160, mobile).then(value => value.blob).catch(() => undefined);
-      return { kind: 'image', size: image.size, thumbnail };
+      return { kind: 'image', thumbnail };
     }
     let task: ReturnType<typeof load> | undefined;
     try {
       task = load(await file.arrayBuffer(), mobile, password);
       const pdf = await task.promise;
+      report({ message: 'Reading document details', step: 2, totalSteps: 3 });
       const { info } = await pdf.getMetadata();
       const fields = info as Record<string, unknown>;
       const string = (key: string) => typeof fields[key] === 'string' ? fields[key] : undefined;
-      const first = await pdf.getPage(1);
-      const { width, height } = first.getViewport({ scale: 1 });
+      await pdf.getPage(1);
       const details: PdfDetails = {
-        count: pdf.numPages, firstPage: { width, height }, version: string('PDFFormatVersion'),
+        count: pdf.numPages, version: string('PDFFormatVersion'),
         encrypted: Boolean(fields.EncryptFilterName || password !== undefined),
         forms: Boolean(fields.IsAcroFormPresent || fields.IsXFAPresent),
         title: string('Title'), author: string('Author'), producer: string('Producer'),
       };
       let unlocked: Blob | undefined;
       if (details.encrypted) {
-        report({ message: 'Unlocking PDF on this device', step: 2, totalSteps: 3 });
+        report({ message: 'Unlocking PDF on this device', step: 3, totalSteps: 3 });
         const { unlockPdf } = await import('./unlock');
         unlocked = await unlockPdf(file, password ?? '');
       }
-      report({ message: 'Drawing first page', step: 3, totalSteps: 3 });
-      const thumbnail = await pdfPreview(first, 0, 160).then(value => value.blob).catch(() => undefined);
       // A reopened document uses the in-memory unlocked copy and never needs the password again.
       if (unlocked) await task.destroy();
       else await this.remember(id, file, task);
-      return { kind: 'pdf', details, unlocked, thumbnail };
+      return { kind: 'pdf', details, unlocked };
     } catch (error) {
       await task?.destroy();
       if (error instanceof PasswordException) {

@@ -4,7 +4,6 @@ import type { PageRef } from '../../tools/pdf/pages';
 
 export interface PdfDetails {
   count: number;
-  firstPage: PageSize;
   version?: string;
   encrypted: boolean;
   forms: boolean;
@@ -14,8 +13,8 @@ export interface PdfDetails {
 }
 
 export type IntakeResult =
-  | { kind: 'pdf'; details: PdfDetails; unlocked?: Blob; thumbnail?: Blob }
-  | { kind: 'image'; size: PageSize; thumbnail?: Blob }
+  | { kind: 'pdf'; details: PdfDetails; unlocked?: Blob }
+  | { kind: 'image'; thumbnail?: Blob }
   | { kind: 'password'; incorrect: boolean };
 
 export interface PreviewResult {

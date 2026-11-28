@@ -1,6 +1,6 @@
 import { ArrowLeft, ArrowRight, Check, Copy, Download, Ellipsis, Image, LoaderCircle, Pencil, X } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
-import { useId, useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type ComponentType, type PointerEvent } from 'react';
 import { sanitizeBaseName } from '../../lib/core/file-name';
 import { Button } from '../ui/button';
 import { Notice } from '../ui/notice';
@@ -12,6 +12,7 @@ export interface FileTileProps {
   baseName: string;
   extension: string;
   thumbnail?: Blob;
+  fallbackIcon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>;
   selected: boolean;
   status: string;
   processing: boolean;
@@ -34,7 +35,7 @@ export interface FileTileProps {
 }
 
 export function FileTile({
-  id, name, baseName, extension, thumbnail, selected, status, processing, error, disabled, ready,
+  id, name, baseName, extension, thumbnail, fallbackIcon: Icon = Image, selected, status, processing, error, disabled, ready,
   canMoveLeft, canMoveRight, dragSource, dropTarget, onSelect, onDownload, onCopy, copyLabel, onRemove, onRename, onMove, onDrag, onDragEnd,
 }: FileTileProps) {
   const url = useObjectUrl(thumbnail);
@@ -111,7 +112,7 @@ export function FileTile({
                 {url ? (
                   /* eslint-disable-next-line @next/next/no-img-element -- Local worker thumbnail. */
                   <img src={url} alt="" draggable={false} />
-                ) : <Image size={21} aria-hidden />}
+                ) : <Icon size={21} aria-hidden />}
               </span>
               <span className="file-name">{name}</span>
               <small className={error ? 'file-error' : ''}>
