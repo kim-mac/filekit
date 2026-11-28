@@ -119,10 +119,12 @@ test('uses keyboard shortcuts to edit pages and preserves native shortcuts in te
   await page.keyboard.press('ControlOrMeta+d');
   await expect(pageButton(page, 5)).toBeVisible();
   await pageButton(page, 1).click();
+  await pageButton(page, 1).focus();
   await page.keyboard.press('Delete');
   await expect(pageButton(page, 5)).toHaveCount(0);
   await expect(pageButton(page, 1)).toBeFocused();
   await pageButton(page, 4).click();
+  await pageButton(page, 4).focus();
   await page.keyboard.press('Backspace');
   await expect(pageButton(page, 4)).toHaveCount(0);
   await page.keyboard.press('ControlOrMeta+z');
